@@ -14,7 +14,7 @@
       "len_pml_ymax" : 0,
       "len_pml_zmin" : 18,
       "len_pml_zmax" : 18,
-      "rcoef_pml": 0.0001,
+      "rcoef_pml": 1e-15,
       "npower_pml": 2.0,
       "k_max_pml": 1.0
     },
