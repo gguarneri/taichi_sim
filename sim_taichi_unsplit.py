@@ -18,13 +18,13 @@ mpl.use('qt5agg')
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
-class SimulatorTaichi(Simulator):
+class SimulatorTaichiUnsplit(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
         super().__init__(file_config)
 
         # Define o nome do simulador
-        self._name = "Taichi"
+        self._name = "Taichi Unsplit"
 
     def implementation(self):
         super().implementation()
@@ -81,21 +81,21 @@ class SimulatorTaichi(Simulator):
         c2_zero_boundaries()
 
         @ti.func
-        def lap(xyz):
-            lp = ti.static(Nd) * ti.static(fd[0]) * u_1[xyz]
+        def lap(u, xyz):
+            lp = ti.static(Nd) * ti.static(fd[0]) * u[xyz]
             for nc in ti.static(range(1, Nc)):  # compile-time loop unrolling
                 for k in ti.static(range(Nd)):
                     xyz[k] += nc
-                    a = u_1[xyz]
+                    a = u[xyz]
                     xyz[k] -= 2 * nc
-                    lp += ti.static(fd[nc]) * (a + u_1[xyz])
+                    lp += ti.static(fd[nc]) * (a + u[xyz])
                     xyz[k] += nc
             return lp
 
         @ti.kernel
         def update_fields(nt: int):
             for xyz in ti.grouped(u_0):
-                u_0[xyz] = 2. * u_1[xyz] - u_2[xyz] + c2[xyz] * lap(xyz)
+                u_0[xyz] = 2 * u_1[xyz] - u_2[xyz] + c2[xyz] * lap(u_1, xyz)
                 for ns in ti.static(range(Ns)):
                     if (xyz == xyz_s[ns]).all():
                         u_0[xyz] += source[nt]
@@ -109,12 +109,6 @@ class SimulatorTaichi(Simulator):
                 u_2[xyz] = u_1[xyz]
                 u_1[xyz] = u_0[xyz]
 
-        # view = 10
-        # vmm = 1e6
-        # cmap = mpl.colormaps['bwr']
-        # norm = lambda x: .5 + x / (2 * vmm)
-        # window = ti.ui.Window(name="Wave", res=Nxyz[0:2], pos=(0, 0))
-        # canvas = window.get_canvas()
         # Definicao dos limites para a plotagem dos campos
         v_max = 100.0
         v_min = - v_max
@@ -128,23 +122,13 @@ class SimulatorTaichi(Simulator):
             circulate_buffers()
             if self._show_anim:
                 if not nt % self._it_display:
-                    u_0np = u_0.to_numpy()
-                    self._windows_gpu[0].imv.setImage(u_0np[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                    u_0np = u_0.to_numpy()[ix_min:ix_max, iy_min:iy_max]
+                    self._windows_gpu[0].imv.setImage(u_0np, levels=[v_min, v_max])
                     self._app.processEvents()
-            # if view:
-            #     if not nt % view:
-            #         u0np = u_0.to_numpy()
-            #         if u0np.ndim > 2:
-            #             u0np = u0np[..., Nxyz[-1] // 2]
-            #         u0npcmap = cmap(norm(u0np)).astype(np.float32)
-            #         canvas.set_image(u0npcmap)
-            #         window.show()
 
         sim_time = time() - t_init
 
-        #return {"vx": vx, "vy": vy, "pressure": pressure,
-        #        "sens_vx": sens_vx, "sens_vy": sens_vy, "sens_pressure": sens_pressure,
-        #        "gpu_str": self._device.adapter.info["device"], "sim_time": sim_time}
+        # "vx": vx, "vy": vy, "sens_vx": sens_vx, "sens_vy": sens_vy
         return {"sim_time": sim_time, "gpu_str": str(ti.lang.impl.current_cfg().arch),
                 "sens_pressure": receiver.to_numpy(), "pressure": u_0.to_numpy()}
 
@@ -153,11 +137,10 @@ class SimulatorTaichi(Simulator):
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
-# parser.add_argument('-c', '--config', help='Configuration file', default='/ensaios/ponto/ponto.json')
 args = parser.parse_args()
 
 # Cria a instancia do simulador
-sim_instance = SimulatorTaichi(args.config)
+sim_instance = SimulatorTaichiUnsplit(args.config)
 
 #%% Executa simulacao
 try:
