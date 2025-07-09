@@ -285,9 +285,6 @@ class SimulatorNumba(Simulator):
                 if self._show_anim:
                     # self._windows_gpu[0].imv.setImage(vx_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(), levels=[v_min, v_max])
                     # self._windows_gpu[1].imv.setImage(vy_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(), levels=[v_min, v_max])
-                    vx = vx_gpu.copy_to_host()
-                    vy = vy_gpu.copy_to_host()
-                    pressure = pressure_gpu.copy_to_host()
                     self._windows_gpu[0].imv.setImage(pressure_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(), levels=[v_min, v_max])
                     self._app.processEvents()
 
