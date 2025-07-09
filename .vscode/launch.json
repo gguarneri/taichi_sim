@@ -29,6 +29,14 @@
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
         {
+            "name": "Ponto CuPy-rawkernel",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cupy_rawkernel.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
             "name": "Ponto Numba",
             "type": "debugpy",
             "request": "launch",
