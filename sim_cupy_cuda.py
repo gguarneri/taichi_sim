@@ -129,7 +129,11 @@ class SimulatorCupyCuda(Simulator):
                 cupy.float32(self._dt), cupy.float32(1.0 / self._dx), cupy.float32(1.0 / self._dy),
                 cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord))
             )
-            cupy.cuda.Stream.null.synchronize()
+            
+            # Adicao das fontes no campo de pressao
+            for _isrc in range(self._n_pto_src):
+                d_pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] *
+                                                                         self._dt * self._one_dx * self._one_dy)
 
             # Calculo da velocidade vx
             velocity_vx_kernel(
@@ -141,9 +145,8 @@ class SimulatorCupyCuda(Simulator):
                 cupy.float32(self._dt), cupy.float32(1.0 / self._dx), cupy.float32(1.0 / self._dy),
                 cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord))
             )
-            cupy.cuda.Stream.null.synchronize()
 
-            # Calculo da velocida vy
+            # Calculo da velocidade vy
             velocity_vy_kernel(
                 grid_velocity, block_size,
                 (d_vy, d_pressure, d_rho_grid_vy,
@@ -153,22 +156,14 @@ class SimulatorCupyCuda(Simulator):
                 cupy.float32(self._dt), cupy.float32(1.0 / self._dx), cupy.float32(1.0 / self._dy),
                 cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord))
             )
-            cupy.cuda.Stream.null.synchronize()
-            
-            # add the source (force vector located at a given grid point)
-            for _isrc in range(self._n_pto_src):
-                d_pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] *
-                                                                         self._dt * self._one_dx * self._one_dy)
 
-            # implement Dirichlet boundary conditions on the six edges of the grid
-            # which is the right condition to implement in order for C-PML to remain stable at long times
+            # Aplica as condicoes de Dirichlet
             dirichlet_boundary_kernel(
                 grid_boundary, block_size,
                 (d_vx, d_vy, cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord))
             )
-            cupy.cuda.Stream.null.synchronize()
 
-            # Store seismograms
+            # Armazena os sinais dos sensores
             for _i in range(self._idx_rec.shape[0]):
                 _irec = self._idx_rec[_i]
                 if it >= self._delay_recv[_irec]:
@@ -185,8 +180,6 @@ class SimulatorCupyCuda(Simulator):
                     print(f"Max pressure = {psn2}")
 
                 if self._show_anim:
-                    # self._windows_gpu[0].imv.setImage(vx_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
-                    # self._windows_gpu[1].imv.setImage(vy_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
                     self._windows_gpu[-1].imv.setImage(d_pressure[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
                     self._app.processEvents()
 
@@ -197,25 +190,18 @@ class SimulatorCupyCuda(Simulator):
         sim_time = time() - t_gpu
 
         # Pega os resultados da simulacao
-        vx = d_vx.get()
-        vy = d_vy.get()
         pressure = d_pressure.get()
         
         # --------------------------------------------
         # A funcao de implementacao do simulador deve retornar
         # um dicionario com as seguintes chaves:
-        #   - "vx": campo de velocidade no eixo x
-        #   - "vygpu": campo de velocidade no eixo y
-        #   - "pressuregpu": campo de pressao
-        #   - "sens_vx": sinais de vx nos sensores
-        #   - "sens_vy": sinais de vy nos sensores
+        #   - "pressure": campo de pressao
         #   - "sens_pressure": sinais da pressao nos sensores
         #   - "gpu_str": string de identificacao da GPU utilizada na simulacao
         #   - "sim_time": tempo da simulacao, medido com a funcao time()
         #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
         # --------------------------------------------
-        return {"vx": vx, "vy": vy, "pressure": pressure,
-                "sens_vx": sens_vx, "sens_vy": sens_vy, "sens_pressure": sens_pressure,
+        return {"pressure": pressure, "sens_pressure": sens_pressure,
                 "gpu_str": cupy.cuda.runtime.getDeviceProperties(0)["name"].decode(), "sim_time": sim_time,
                 "msg_impl": f'Block size: ({self._block_size_x}, {self._block_size_y})'}
         

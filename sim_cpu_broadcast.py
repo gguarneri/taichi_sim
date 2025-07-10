@@ -68,7 +68,8 @@ class SimulatorCpuBroadcast(Simulator):
         iy_max = self._roi.get_iz_max()
 
         # Inicializa os mapas dos parametros de Lame
-        kappa_unrelaxed = self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx
+        kappa = (self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx *
+                 self._dt * self._one_dx * self._one_dy)
         
         # Acrescenta eixo se source_term for array unidimensional
         if self._n_pto_src == 1:
@@ -116,10 +117,9 @@ class SimulatorCpuBroadcast(Simulator):
                                                     memory_dvy_dy[i_dix:i_dfx, i_diy:i_dfy])
             
             # compute the pressure using the Lame parameters
-            pressure += kappa_unrelaxed * (value_dvx_dx + value_dvy_dy) * self._dt * self._one_dx * self._one_dy
+            pressure += kappa * (value_dvx_dx + value_dvy_dy)
 
-            # add the source (force vector located at a given grid point)
-            # add the source (force vector located at a given grid point)
+            # Adicao das fontes no campo de pressao
             for _isrc in range(self._n_pto_src):
                 pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] *
                                                                        self._dt * self._one_dx * self._one_dy)
@@ -179,8 +179,7 @@ class SimulatorCpuBroadcast(Simulator):
 
             vy += self._dt * (value_dpressure_dy / self._rho_grid_vy)
 
-            # implement Dirichlet boundary conditions on the six edges of the grid
-            # which is the right condition to implement in order for C-PML to remain stable at long times
+            # Aplica as condicoes de Dirichlet
             # xmin
             vx[:(ord - 1), :] = ZERO
             vy[:(ord - 1), :] = ZERO
@@ -197,7 +196,7 @@ class SimulatorCpuBroadcast(Simulator):
             vx[:, -(ord - 1):] = ZERO
             vy[:, -(ord - 1):] = ZERO
 
-            # Store seismograms
+            # Armazena os sinais dos sensores
             for _i in range(self._idx_rec.shape[0]):
                 _irec = self._idx_rec[_i]
                 if it >= self._delay_recv[_irec]:
@@ -214,8 +213,6 @@ class SimulatorCpuBroadcast(Simulator):
                     print(f"Max absolute value of pressure = {psn2}")
 
                 if self._show_anim:
-                    # self._windows_gpu[0].imv.setImage(vx[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                    # self._windows_gpu[1].imv.setImage(vy[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
                     self._windows_gpu[0].imv.setImage(pressure[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
                     self._app.processEvents()
 
@@ -228,19 +225,15 @@ class SimulatorCpuBroadcast(Simulator):
         # --------------------------------------------
         # A funcao de implementacao do simulador deve retornar
         # um dicionario com as seguintes chaves:
-        #   - "vx": campo de velocidade no eixo x
-        #   - "vygpu": campo de velocidade no eixo y
-        #   - "pressuregpu": campo de pressao
-        #   - "sens_vx": sinais de vx nos sensores
-        #   - "sens_vy": sinais de vy nos sensores
+        #   - "pressure": campo de pressao
         #   - "sens_pressure": sinais da pressao nos sensores
         #   - "gpu_str": string de identificacao da GPU utilizada na simulacao
         #   - "sim_time": tempo da simulacao, medido com a funcao time()
+        #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
         # --------------------------------------------
-        return {"vx": vx, "vy": vy, "pressure": pressure,
-                "sens_vx": sens_vx, "sens_vy": sens_vy, "sens_pressure": sens_pressure,
+        return {"pressure": pressure, "sens_pressure": sens_pressure,
                 "gpu_str": "CPU - broadcast", "sim_time": sim_time}
-        
+
 
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando

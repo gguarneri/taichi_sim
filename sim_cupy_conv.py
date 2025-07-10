@@ -129,7 +129,12 @@ class SimulatorCupyConv(Simulator):
                     memory_dvy_dy_gpu[i_dix:i_dfx, i_diy:i_dfy])
 
             # compute the pressure using the Lame parameters
-            pressure_gpu = pressure_gpu + kappa_gpu * (value_dvx_dx_gpu + value_dvy_dy_gpu)
+            pressure_gpu += kappa_gpu * (value_dvx_dx_gpu + value_dvy_dy_gpu)
+            
+            # Adicao das fontes no campo de pressao
+            for _isrc in range(self._n_pto_src):
+                pressure_gpu[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] * 
+                                                                           self._dt * self._one_dx * self._one_dy)
 
             # Calculo da velocidade
             # Primeiro "laco" i: 2,NX; j: 2,NY -> [2:-1, 2:-1]
@@ -149,7 +154,7 @@ class SimulatorCupyConv(Simulator):
                     value_dpressure_dx_gpu[i_dix:i_dfx, i_diy:i_dfy] / k_x_gpu[1:, :] +
                     memory_dpressure_dx_gpu[i_dix:i_dfx, i_diy:i_dfy])
 
-            vx_gpu = vx_gpu + self._dt * (value_dpressure_dx_gpu / rho_grid_vx_gpu)
+            vx_gpu += self._dt * (value_dpressure_dx_gpu / rho_grid_vx_gpu)
 
             # segunda parte:  i: 1,NX-1; j: 1,NY-1 -> [1:-2, 1:-2]
             i_dix = idx_fd[0, 1]
@@ -168,15 +173,9 @@ class SimulatorCupyConv(Simulator):
                 (value_dpressure_dy_gpu[i_dix:i_dfx, i_diy:i_dfy] / k_y_half_gpu[:, :-1] +
                 memory_dpressure_dy_gpu[i_dix:i_dfx, i_diy:i_dfy])
 
-            vy_gpu = vy_gpu + self._dt * (value_dpressure_dy_gpu / rho_grid_vy_gpu)
-            
-            # add the source (force vector located at a given grid point)
-            for _isrc in range(self._n_pto_src):
-                pressure_gpu[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] * 
-                                                                           self._dt * self._one_dx * self._one_dy)
+            vy_gpu += self._dt * (value_dpressure_dy_gpu / rho_grid_vy_gpu)
 
-            # implement Dirichlet boundary conditions on the six edges of the grid
-            # which is the right condition to implement in order for C-PML to remain stable at long times
+            # Aplica as condicoes de Dirichlet
             # xmin
             vx_gpu[:ord - 1, :] = ZERO
             vy_gpu[:ord - 1 , :] = ZERO
@@ -193,7 +192,7 @@ class SimulatorCupyConv(Simulator):
             vx_gpu[:, -ord - 1:] = ZERO
             vy_gpu[:, -ord - 1:] = ZERO
 
-            # Store seismograms
+            # Armazena os sinais dos sensores
             for _i in range(self._idx_rec.shape[0]):
                 _irec = self._idx_rec[_i]
                 if it >= self._delay_recv[_irec]:
@@ -210,8 +209,6 @@ class SimulatorCupyConv(Simulator):
                     print(f'Max pressure = {psn2}')
 
                 if self._show_anim:
-                    # self._windows_gpu[0].imv.setImage(vx_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
-                    # self._windows_gpu[1].imv.setImage(vy_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
                     self._windows_gpu[0].imv.setImage(pressure_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
                     self._app.processEvents()
 
@@ -222,24 +219,18 @@ class SimulatorCupyConv(Simulator):
         sim_time = time() - t_gpu
 
         # Pega os resultados da simulacao
-        vx = vx_gpu.get()
-        vy = vy_gpu.get()
         pressure = pressure_gpu.get()
 
         # --------------------------------------------
         # A funcao de implementacao do simulador deve retornar
         # um dicionario com as seguintes chaves:
-        #   - "vx": campo de velocidade no eixo x
-        #   - "vygpu": campo de velocidade no eixo y
-        #   - "pressuregpu": campo de pressao
-        #   - "sens_vx": sinais de vx nos sensores
-        #   - "sens_vy": sinais de vy nos sensores
+        #   - "pressure": campo de pressao
         #   - "sens_pressure": sinais da pressao nos sensores
         #   - "gpu_str": string de identificacao da GPU utilizada na simulacao
         #   - "sim_time": tempo da simulacao, medido com a funcao time()
+        #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
         # --------------------------------------------
-        return {"vx": vx, "vy": vy, "pressure": pressure,
-                "sens_vx": sens_vx, "sens_vy": sens_vy, "sens_pressure": sens_pressure,
+        return {"pressure": pressure, "sens_pressure": sens_pressure,
                 "gpu_str": cupy.cuda.runtime.getDeviceProperties(0)["name"].decode(), "sim_time": sim_time}
         
 

@@ -67,6 +67,15 @@ class SimulatorNumba(Simulator):
 
                 pressure[x, y] += kappa[x, y]*(vdvx_dx + vdvy_dy) * dt * one_dx * one_dy
         
+        # Adicao das fontes no campo de pressao
+        @cuda.jit
+        def sources_kernel(pressure, source_term, idx_source, it, dt, one_dx, one_dy):
+            x, y = cuda.grid(2)
+
+            idx_src = idx_source[x, y]
+            if idx_src != -1:
+                pressure[x, y] += source_term[it - 1, idx_src] * dt * one_dx * one_dy
+                
         # Velocidades
         @cuda.jit
         def velocity_kernel(vx, vy, pressure, rho_grid_vx, rho_grid_vy,
@@ -115,15 +124,6 @@ class SimulatorNumba(Simulator):
                 mdpressure_dy[x, y] = mdpressure_dy_new
 
                 vy[x, y] += dt * (dpressure_dy / rho_grid_vy[x, y])
-               
-        # # Adicao da fonte no campo de pressao
-        @cuda.jit
-        def sources_kernel(pressure, source_term, idx_source, it, dt, one_dx, one_dy):
-            x, y = cuda.grid(2)
-
-            idx_src = idx_source[x, y]
-            if idx_src != -1:
-                pressure[x, y] += source_term[it, idx_src] * dt * one_dx * one_dy
         
         # Finalizacao da iteracao
         @cuda.jit
@@ -161,7 +161,7 @@ class SimulatorNumba(Simulator):
                     y = info_rec_pt[pt, 1]
                     sens_vx[it, sensor] += vx[x, y]
                     sens_vy[it, sensor] += vy[x, y]
-                    sens_pressure[it, sensor] += pressure[x, y]
+                    sens_pressure[it - 1, sensor] += pressure[x, y]
                 
                 pt += 1
 
@@ -254,6 +254,10 @@ class SimulatorNumba(Simulator):
                                                      self._dt, self._one_dx, self._one_dy, pressure_l2_norm_gpu,
                                                      self._nx, self._ny, ord)
             
+            # Adicao das fontes no campo de pressao
+            sources_kernel[grid_fields, block_size](pressure_gpu, source_term_gpu, idx_src_gpu,
+                                                    it, self._dt, self._one_dx, self._one_dy)
+            
             # Calculo das velocidades
             velocity_kernel[grid_fields, block_size](vx_gpu, vy_gpu, pressure_gpu, rho_grid_vx_gpu, rho_grid_vy_gpu,
                                                      memory_dpressure_dx_gpu, memory_dpressure_dy_gpu,
@@ -263,15 +267,11 @@ class SimulatorNumba(Simulator):
                                                      self._dt, self._one_dx, self._one_dy,
                                                      self._nx, self._ny, ord)
             
-            # Adicao da fonte no campo de pressao
-            sources_kernel[grid_fields, block_size](pressure_gpu, source_term_gpu, idx_src_gpu,
-                                                    it, self._dt, self._one_dx, self._one_dy)
-            
             # Aplica as condicoes de Dirichlet
             finish_it_kernel[grid_fields, block_size](vx_gpu, vy_gpu, pressure_gpu, idx_fd_gpu,
                                                       pressure_l2_norm_gpu, self._nx, self._ny, ord)
 
-            # Store seismograms
+            # Armazena os sinais dos sensores
             store_sensors_kernel[grid_sens, sens_blk_sz](vx_gpu, vy_gpu, pressure_gpu,
                                    sens_vx_gpu, sens_vy_gpu, sens_pressure_gpu,
                                    offset_sensors_gpu, info_rec_pt_gpu, delay_rec_gpu, it)
@@ -283,11 +283,6 @@ class SimulatorNumba(Simulator):
                     print(f'Max pressure = {psn2}')
 
                 if self._show_anim:
-                    # self._windows_gpu[0].imv.setImage(vx_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(), levels=[v_min, v_max])
-                    # self._windows_gpu[1].imv.setImage(vy_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(), levels=[v_min, v_max])
-                    vx = vx_gpu.copy_to_host()
-                    vy = vy_gpu.copy_to_host()
-                    pressure = pressure_gpu.copy_to_host()
                     self._windows_gpu[0].imv.setImage(pressure_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(), levels=[v_min, v_max])
                     self._app.processEvents()
 
@@ -298,27 +293,19 @@ class SimulatorNumba(Simulator):
         sim_time = time() - t_gpu
 
         # Pega os resultados da simulacao
-        vx = vx_gpu.copy_to_host()
-        vy = vy_gpu.copy_to_host()
         pressure = pressure_gpu.copy_to_host()
-        sens_vx = sens_vx_gpu.copy_to_host()
-        sens_vy = sens_vy_gpu.copy_to_host()
         sens_pressure = sens_pressure_gpu.copy_to_host()
 
         # --------------------------------------------
         # A funcao de implementacao do simulador deve retornar
         # um dicionario com as seguintes chaves:
-        #   - "vx": campo de velocidade no eixo x
-        #   - "vygpu": campo de velocidade no eixo y
-        #   - "pressuregpu": campo de pressao
-        #   - "sens_vx": sinais de vx nos sensores
-        #   - "sens_vy": sinais de vy nos sensores
+        #   - "pressure": campo de pressao
         #   - "sens_pressure": sinais da pressao nos sensores
         #   - "gpu_str": string de identificacao da GPU utilizada na simulacao
         #   - "sim_time": tempo da simulacao, medido com a funcao time()
+        #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
         # --------------------------------------------
-        return {"vx": vx, "vy": vy, "pressure": pressure,
-                "sens_vx": sens_vx, "sens_vy": sens_vy, "sens_pressure": sens_pressure,
+        return {"pressure": pressure, "sens_pressure": sens_pressure,
                 "gpu_str": cuda.gpus.current.name, "sim_time": sim_time}
 
 
