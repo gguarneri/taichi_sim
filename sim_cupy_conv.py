@@ -97,7 +97,7 @@ class SimulatorCupyConv(Simulator):
 
         # Acrescenta eixo se source_term for array unidimensional
         if self._n_pto_src == 1:
-            self._source_term = self._source_term[:, np.newaxis]
+            source_term = self._source_term[:, np.newaxis]
             
         # Laco de tempo para execucao da simulacao
         t_gpu = time()
@@ -133,7 +133,7 @@ class SimulatorCupyConv(Simulator):
             
             # Adicao das fontes no campo de pressao
             for _isrc in range(self._n_pto_src):
-                pressure_gpu[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] * 
+                pressure_gpu[self._ix_src[_isrc], self._iy_src[_isrc]] += (source_term[it - 1, _isrc] * 
                                                                            self._dt * self._one_dx * self._one_dy)
 
             # Calculo da velocidade

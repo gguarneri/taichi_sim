@@ -95,7 +95,7 @@ class SimulatorCupyCuda(Simulator):
         
         # Acrescenta eixo se source_term for array unidimensional
         if self._n_pto_src == 1:
-            self._source_term = self._source_term[:, np.newaxis]
+            source_term = self._source_term[:, np.newaxis]
             
         # Cria os kernels
         with open('sim_cupy_cuda.cu') as kernel_file:
@@ -132,7 +132,7 @@ class SimulatorCupyCuda(Simulator):
             
             # Adicao das fontes no campo de pressao
             for _isrc in range(self._n_pto_src):
-                d_pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] *
+                d_pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (source_term[it - 1, _isrc] *
                                                                          self._dt * self._one_dx * self._one_dy)
 
             # Calculo da velocidade vx
