@@ -391,7 +391,7 @@ class SimulatorWebGPU(Simulator):
 
             # Ativa o pipeline de execucao do armazenamento dos sensores
             compute_pass.set_pipeline(compute_store_sensors_kernel)
-            compute_pass.dispatch_workgroups(1)
+            compute_pass.dispatch_workgroups(self._idx_rec_offset)
 
             # Ativa o pipeline de atualizacao da amostra de tempo
             compute_pass.set_pipeline(compute_incr_it_kernel)
