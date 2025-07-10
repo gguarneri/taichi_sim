@@ -52,6 +52,14 @@
             "program": "${workspaceFolder}/sim_cpu_broadcast.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CPU-conv",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_conv.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         }
     ]
 }

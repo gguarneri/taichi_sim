@@ -90,7 +90,7 @@ class SimulatorWebGPU(Simulator):
         b_b_y_h = self._device.create_buffer_with_data(data=self._b_y_half.flatten(), usage=read_only_mask)
         b_k_y_h = self._device.create_buffer_with_data(data=self._k_y_half.flatten(), usage=read_only_mask)
 
-        # Buffers com os indices para o calculo das derivadas com acuracia maior
+        # Buffers com os indices para o calculo com o staggered grid
         idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(ord)], dtype=int32)
         b_idx_fd = self._device.create_buffer_with_data(data=idx_fd, usage=read_only_mask)
 
@@ -331,12 +331,12 @@ class SimulatorWebGPU(Simulator):
         compute_pressure_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                        compute={"module": cshader,
                                                                                 "entry_point": "pressure_kernel"})
-        compute_velocity_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                       compute={"module": cshader,
-                                                                                "entry_point": "velocity_kernel"})
         compute_sources_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                       compute={"module": cshader,
                                                                                "entry_point": "sources_kernel"})
+        compute_velocity_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
+                                                                       compute={"module": cshader,
+                                                                                "entry_point": "velocity_kernel"})
         compute_finish_it_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                         compute={"module": cshader,
                                                                                  "entry_point": "finish_it_kernel"})
@@ -377,12 +377,12 @@ class SimulatorWebGPU(Simulator):
             compute_pass.set_pipeline(compute_pressure_kernel)
             compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
 
+            # Ativa o pipeline de adicao das fontes no campo de pressao
+            compute_pass.set_pipeline(compute_sources_kernel)
+            compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
+            
             # Ativa o pipeline de execucao do calculo das velocidades
             compute_pass.set_pipeline(compute_velocity_kernel)
-            compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de adicao dos termos de fonte
-            compute_pass.set_pipeline(compute_sources_kernel)
             compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
 
             # Ativa o pipeline de execucao dos procedimentos finais da iteracao
@@ -411,12 +411,7 @@ class SimulatorWebGPU(Simulator):
                     print(f'Max pressure = {psn2}')
 
                 if self._show_anim:
-                    # vxgpu = np.asarray(device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((nx, ny))
-                    # vygpu = np.asarray(device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((nx, ny))
                     pressuregpu = np.asarray(self._device.queue.read_buffer(b_pressure, buffer_offset=0).cast("f")).reshape((self._nx, self._ny))
-
-                    # windows_gpu[0].imv.setImage(vxgpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
-                    # windows_gpu[1].imv.setImage(vygpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
                     self._windows_gpu[0].imv.setImage(pressuregpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
                     self._app.processEvents()
 
@@ -427,27 +422,19 @@ class SimulatorWebGPU(Simulator):
         sim_time = time() - t_gpu
 
         # Pega os resultados da simulacao
-        vx = np.asarray(self._device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape((self._nx, self._ny))
-        vy = np.asarray(self._device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape((self._nx, self._ny))
         pressure = np.asarray(self._device.queue.read_buffer(b_pressure, buffer_offset=0).cast("f")).reshape((self._nx, self._ny))
-        sens_vx = np.array(self._device.queue.read_buffer(b_sens_x).cast("f")).reshape((self._n_steps, self._n_rec))
-        sens_vy = np.array(self._device.queue.read_buffer(b_sens_y).cast("f")).reshape((self._n_steps, self._n_rec))
         sens_pressure = np.array(self._device.queue.read_buffer(b_sens_pressure).cast("f")).reshape((self._n_steps, self._n_rec))
 
         # --------------------------------------------
         # A funcao de implementacao do simulador deve retornar
         # um dicionario com as seguintes chaves:
-        #   - "vx": campo de velocidade no eixo x
-        #   - "vygpu": campo de velocidade no eixo y
-        #   - "pressuregpu": campo de pressao
-        #   - "sens_vx": sinais de vx nos sensores
-        #   - "sens_vy": sinais de vy nos sensores
+        #   - "pressure": campo de pressao
         #   - "sens_pressure": sinais da pressao nos sensores
         #   - "gpu_str": string de identificacao da GPU utilizada na simulacao
         #   - "sim_time": tempo da simulacao, medido com a funcao time()
+        #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
         # --------------------------------------------
-        return {"vx": vx, "vy": vy, "pressure": pressure,
-                "sens_vx": sens_vx, "sens_vy": sens_vy, "sens_pressure": sens_pressure,
+        return {"pressure": pressure, "sens_pressure": sens_pressure,
                 "gpu_str": self._device.adapter.info["device"], "sim_time": sim_time}
         
 
