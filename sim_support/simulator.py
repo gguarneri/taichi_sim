@@ -323,9 +323,8 @@ class Simulator:
                         self._iy_src - self._iy_rec)**2)
                         td = rd / self._cp + self._probes[0]._t0_emission
                         ntd = td / self._dt
-                        print(ntd, self._ix_src, self._iy_src, self._ix_rec,
-                              self._iy_rec)
-                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]), np.max(results_dict["sens_pressure"][:, r])])
+                        #print(ntd, self._ix_src, self._iy_src, self._ix_rec, self._iy_rec)
+                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]), np.max(results_dict["sens_pressure"][:, r])], label="Posição esperada eco")
                         sensors_result.append(sensor_pressure_result)
 
                     if self._show_figs:

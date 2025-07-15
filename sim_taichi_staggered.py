@@ -57,6 +57,9 @@ class SimulatorTaichiStaggered(Simulator):
         v = [ti.field(tiFtype, shape=Nxyz) for _ in range(Nd)]
         #u_2 = ti.field(tiFtype, shape=Nxyz)
         source = ti.field(tiFtype, shape=self._n_steps)
+        source.from_numpy((self._dt * np.cumsum(self._source_term * self._dt)).astype(npFtype))
+        # source.from_numpy((self._source_term * self._dt).astype(npFtype))
+
         receiver = ti.field(tiFtype, shape=(self._n_steps, self._n_rec))
 
         self._deriv_acc = 2
@@ -70,8 +73,6 @@ class SimulatorTaichiStaggered(Simulator):
         fd = tuple(fd_np)
         # print(fd)
         Nc = len(fd)
-        source.from_numpy(np.cumsum(self._source_term * self._dt).astype(npFtype))
-        # source.from_numpy((self._source_term * self._dt).astype(npFtype))
 
         p.fill(0.)
         for nd in range(Nd):
@@ -122,11 +123,14 @@ class SimulatorTaichiStaggered(Simulator):
         def D(nd, u, xyz, bf):
             d = 0.
             for nc in ti.static(range(Nc)):
-                # xyz_p = xyz
-                # xyz_m = xyz
+                # # Solution 1
+                # xyz_p = xyz[:]
+                # xyz_m = xyz[:]
                 # xyz_p[nd] += nc + bf
-                # xyz_m[nd] -= nc + 1 + bf
+                # xyz_m[nd] -= nc - bf + 1
                 # d += ti.static(fd[nc]) * (u[xyz_p] - u[xyz_m])
+
+                # Solution 2
                 xyz[nd] += nc + bf
                 a = u[xyz]
                 xyz[nd] += - 2 * nc - 1
@@ -166,7 +170,7 @@ class SimulatorTaichiStaggered(Simulator):
         # window = ti.ui.Window(name="Wave", res=Nxyz[0:2], pos=(0, 0))
         # canvas = window.get_canvas()
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
+        v_max = 1.0
         v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()

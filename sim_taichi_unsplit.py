@@ -4,8 +4,6 @@
 import argparse
 from time import time
 import numpy as np
-
-# from sim_cupy_cuda import sim_instance
 from sim_support import *
 from sim_support.simulator import Simulator
 
@@ -57,12 +55,13 @@ class SimulatorTaichiUnsplit(Simulator):
         u_1 = ti.field(tiFtype, shape=Nxyz)
         u_2 = ti.field(tiFtype, shape=Nxyz)
         source = ti.field(tiFtype, shape=self._n_steps)
+        source.from_numpy((self._dt * self._source_term).astype(npFtype))
+
         receiver = ti.field(tiFtype, shape=(self._n_steps, self._n_rec))
 
         fd_np = findiff.coefficients(deriv=2, acc=self._deriv_acc)['center']['coefficients'][self._deriv_acc//2:].astype(npFtype)
         fd = tuple(fd_np)
         Nc = len(fd)
-        source.from_numpy(self._source_term.astype(npFtype))
 
         u_0.fill(0.)
         u_1.fill(0.)
@@ -110,7 +109,7 @@ class SimulatorTaichiUnsplit(Simulator):
                 u_1[xyz] = u_0[xyz]
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
+        v_max = 1.0
         v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
