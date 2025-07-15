@@ -10,19 +10,21 @@ from sim_support.simulator import Simulator
 # ======================
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
-import taichi as ti
 import findiff
+from scipy.ndimage import correlate
 
+
+#%%
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
-class SimulatorTaichiStaggered(Simulator):
+class SimulatorCPUNumpy(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
         super().__init__(file_config)
 
         # Define o nome do simulador
-        self._name = "Taichi Staggered"
+        self._name = "CPU Numpy"
 
     def implementation(self):
         super().implementation()
@@ -30,8 +32,8 @@ class SimulatorTaichiStaggered(Simulator):
         # --------------------------------------------
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
-        ti.init(arch=ti.gpu)
-        tiFtype = ti.float32
+        # ti.init(arch=ti.gpu)
+        # tiFtype = ti.float32
         npFtype = np.float32
 
         try:
@@ -50,49 +52,37 @@ class SimulatorTaichiStaggered(Simulator):
         Ns = len(xyz_s)  # Number of sources
         Nr = len(xyz_r)  # Number of receivers
 
-        c2 = ti.field(tiFtype, shape=Nxyz)
-        # rho_ = ti.field(tiFtype, shape=Nxyz)
-        # K = ti.field(tiFtype, shape=Nxyz)
-        p = ti.field(tiFtype, shape=Nxyz)
-        v = [ti.field(tiFtype, shape=Nxyz) for _ in range(Nd)]
-        #u_2 = ti.field(tiFtype, shape=Nxyz)
-        source = ti.field(tiFtype, shape=self._n_steps)
-        receiver = ti.field(tiFtype, shape=(self._n_steps, self._n_rec))
+        c2 = np.zeros(Nxyz, dtype=npFtype)
+        p = np.zeros(Nxyz, dtype=npFtype)
+        v = [np.zeros(Nxyz, dtype=npFtype) for _ in range(Nd)]
+        source = np.zeros(self._n_steps, dtype=npFtype)
+        receiver = np.zeros((self._n_steps, self._n_rec), dtype=npFtype)
 
         self._deriv_acc = 2
         offset = (np.concatenate((np.arange(-self._deriv_acc, 0), np.arange(self._deriv_acc))) + .5).astype(npFtype)
-        fd_np = findiff.coefficients(deriv=1, offsets=list(offset))["coefficients"][round(self._deriv_acc):].astype(npFtype)
-        # offset = (np.concatenate((np.arange(-2, 0), np.arange(2))) + .5).astype(npFtype)
-        # fd_np = findiff.coefficients(deriv=1, offsets=list(offset)) \
-        #             ["coefficients"][round(2):].astype(npFtype)
-        #fd_np = findiff.coefficients(deriv=2, acc=self._deriv_acc)['center']['coefficients'][self._deriv_acc//2:].astype(npFtype)
-        # fd_np = np.array([9.0 / 8.0, -1.0 / 24.0]).astype(npFtype)
-        fd = tuple(fd_np)
-        # print(fd)
+        # fd = findiff.coefficients(deriv=1, offsets=list(offset))["coefficients"][round(self._deriv_acc):].astype(npFtype)
+        fd = findiff.coefficients(deriv=1, offsets=list(offset))["coefficients"].astype(npFtype)
         Nc = len(fd)
-        source.from_numpy(np.cumsum(self._source_term * self._dt).astype(npFtype))
-        # source.from_numpy((self._source_term * self._dt).astype(npFtype))
+        #source = np.cumsum(self._source_term * self._dt).astype(npFtype)
+        source = (self._source_term * self._dt).astype(npFtype)
 
-        p.fill(0.)
-        for nd in range(Nd):
-            v[nd].fill(0.)
         c2.fill(self._cp ** 2 * self._dt / self._dx)
         # rho_.fill(self._dt / (self._rho * self._dx))
         # K.fill(self._dt / (self._cp ** 2 * self._rho * self._dx))
         dtOdx = self._dt / self._dx
 
-        @ti.kernel
-        def parameters_zero_boundaries():
-            for xyz in ti.grouped(c2):
-                cond = False
-                for nd in ti.static(range(Nd)):
-                    cond = cond or xyz[nd] < self._deriv_acc or xyz[nd] >= Nxyz[nd] - self._deriv_acc
-                if cond:
-                    # rho_[xyz] = 0.
-                    # K[xyz] = 0.
-                    c2[xyz] = 0.
-
-        parameters_zero_boundaries()
+        # @ti.kernel
+        # def parameters_zero_boundaries():
+        #     for xyz in ti.grouped(c2):
+        #         cond = False
+        #         for k in ti.static(range(Nd)):
+        #             cond = cond or xyz[k] < self._deriv_acc - 1 or xyz[k] > Nxyz[k] - self._deriv_acc
+        #         if cond:
+        #             # rho_[xyz] = 0.
+        #             # K[xyz] = 0.
+        #             c2[xyz] = 0.
+        #
+        # parameters_zero_boundaries()
 
         # @ti.func
         # def lap(u, xyz):
@@ -118,41 +108,65 @@ class SimulatorTaichiStaggered(Simulator):
         #             d += ti.static(fd[nc]) * (u[nd, xyz_p] - u[nd, xyz_m])
         #     return d
 
-        @ti.func
-        def D(nd, u, xyz, bf):
-            d = 0.
-            for nc in ti.static(range(Nc)):
-                # xyz_p = xyz
-                # xyz_m = xyz
-                # xyz_p[nd] += nc + bf
-                # xyz_m[nd] -= nc + 1 + bf
-                # d += ti.static(fd[nc]) * (u[xyz_p] - u[xyz_m])
-                xyz[nd] += nc + bf
-                a = u[xyz]
-                xyz[nd] += - 2 * nc - 1
-                d += ti.static(fd[nc]) * (a - u[xyz])
-                xyz[nd] += nc + 1 - bf
+        # @ti.func
+        def D_(nd, u, bf):
+            d = np.zeros(Nxyz, dtype=npFtype)
+            for xyz in np.ndindex(Nxyz):
+                for nc in range(Nc):
+                    xyz_p = list(xyz)
+                    xyz_m = list(xyz)
+                    xyz_p[nd] += nc + bf
+                    xyz_m[nd] -= nc + 1 + bf
+                    d[xyz] += fd[nc] * (u[tuple(xyz_p)] - u[tuple(xyz_m)])
             return d
 
-        @ti.kernel
-        def update_p(nt: int):
-            for xyz in ti.grouped(p):
-                # p[xyz] -= K[xyz] * div(v, xyz)
-                for nd in ti.static(range(Nd)):
-                    p[xyz] -= c2[xyz] * D(nd, v[nd], xyz, 1)
-                for ns in ti.static(range(Ns)):
-                    if (xyz == xyz_s[ns]).all():
-                        p[xyz] += source[nt]
-                for nr in ti.static(range(Nr)):
-                    if (xyz == xyz_r[nr]).all():
-                        receiver[nt, nr] = p[xyz]
+        # @nb.njit
+        def D_(dim, u, bf):
+            w = u.swapaxes(0, dim)
+            y = np.zeros((w.shape[0] + 1, w.shape[1]), dtype=npFtype)
+            for i, c in enumerate(fd):
+                y[:-i - 1, ...] += c * w[i:, ...]
+                y[i + 1:, ...] -= c * w[:w.shape[0] - i, ...]
+            return y[bf:y.shape[0] + bf - 1, ...].swapaxes(0, dim)
 
-        @ti.kernel
-        def update_v():
-            for xyz in ti.grouped(p):
-                for nd in ti.static(range(Nd)):
-                    #v[nd, xyz] -= rho_[xyz] * D(nd, p, xyz)
-                    v[nd][xyz] -= dtOdx * D(nd, p, xyz, 0)
+        def D(dim, u, bf):
+            return correlate(u, fd, mode="constant", cval=0, origin=-bf, axes=dim)
+
+        #
+        # @ti.kernel
+        def update_p(p, v, nt):
+            for nd in range(Nd):
+                p -= c2 * D(nd, v[nd], 1)
+
+            for ns in range(Ns):
+                #if (xyz == xyz_s[ns]).all():
+                p[xyz_s[ns]] += source[nt]
+            for nr in range(Nr):
+                # if (xyz == xyz_r[nr]).all():
+                receiver[nt, nr] = p[xyz_r[nr]]
+            # p[xyz_s] += source[nt]
+        #    for xyz in ti.grouped(p):
+        #        # p[xyz] -= K[xyz] * div(v, xyz)
+        #         for nd in ti.static(range(Nd)):
+        #             p[xyz] -= c2[xyz] * D(nd, v[nd], xyz, 1)
+        #         for ns in ti.static(range(Ns)):
+        #             if (xyz == xyz_s[ns]).all():
+        #                 p[xyz] += source[nt]
+        #         for nr in ti.static(range(Nr)):
+        #             if (xyz == xyz_r[nr]).all():
+        #                 receiver[nt, nr] = p[xyz]
+        #
+        # @ti.kernel
+        # def update_v():
+        #     for xyz in ti.grouped(p):
+        #         for nd in ti.static(range(Nd)):
+        #             #v[nd, xyz] -= rho_[xyz] * D(nd, p, xyz)
+        #             v[nd][xyz] -= dtOdx * D(nd, p, xyz, 0)
+
+        def update_v(p, v):
+            for nd in range(Nd):
+                v[nd] -= dtOdx * D(nd, p, 0)
+
         # @ti.kernel
         # def circulate_buffers():
         #     for xyz in ti.grouped(u_0):
@@ -174,12 +188,11 @@ class SimulatorTaichiStaggered(Simulator):
         iy_max = self._roi.get_iz_max()
         t_init = time()
         for nt in range(self._n_steps):
-            update_v()
-            update_p(nt)
+            update_p(p, v, nt)
+            update_v(p, v)
             if self._show_anim:
                 if not nt % self._it_display:
-                    p_np = p.to_numpy()
-                    self._windows_gpu[0].imv.setImage(p_np[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                    self._windows_gpu[0].imv.setImage(p[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
                     self._app.processEvents()
             # if view:
             #     if not nt % view:
@@ -195,8 +208,8 @@ class SimulatorTaichiStaggered(Simulator):
         #return {"vx": vx, "vy": vy, "pressure": pressure,
         #        "sens_vx": sens_vx, "sens_vy": sens_vy, "sens_pressure": sens_pressure,
         #        "gpu_str": self._device.adapter.info["device"], "sim_time": sim_time}
-        return {"sim_time": sim_time, "gpu_str": str(ti.lang.impl.current_cfg().arch),
-                "sens_pressure": receiver.to_numpy(), "pressure": p.to_numpy()}
+        return {"sim_time": sim_time, "gpu_str": "CPU",
+                "sens_pressure": receiver, "pressure": p}
 
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando
@@ -206,7 +219,7 @@ parser.add_argument('-c', '--config', help='Configuration file', default='config
 args = parser.parse_args()
 
 # Cria a instancia do simulador
-sim_instance = SimulatorTaichiStaggered(args.config)
+sim_instance = SimulatorCPUNumpy(args.config)
 
 #%% Executa simulacao
 try:

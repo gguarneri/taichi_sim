@@ -13,6 +13,10 @@ from sim_support.emission_law import EmissionLaw
 from sim_support.windows_qt import Window
 from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint)   
         
+import platform
+if platform.system() == "Darwin":
+    import matplotlib as mpl
+    mpl.use('Qt5Agg')
 
 class Simulator:
     def __init__(self, file_config):
@@ -315,6 +319,13 @@ class Simulator:
                         sensor_pressure_result = plt.figure()
                         plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
                         plt.plot(results_dict["sens_pressure"][:, r])
+                        rd = self._dx * np.sqrt((self._ix_src - self._ix_rec)**2 + (
+                        self._iy_src - self._iy_rec)**2)
+                        td = rd / self._cp + self._probes[0]._t0_emission
+                        ntd = td / self._dt
+                        print(ntd, self._ix_src, self._iy_src, self._ix_rec,
+                              self._iy_rec)
+                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]), np.max(results_dict["sens_pressure"][:, r])])
                         sensors_result.append(sensor_pressure_result)
 
                     if self._show_figs:

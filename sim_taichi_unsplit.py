@@ -4,6 +4,8 @@
 import argparse
 from time import time
 import numpy as np
+
+# from sim_cupy_cuda import sim_instance
 from sim_support import *
 from sim_support.simulator import Simulator
 
@@ -12,8 +14,6 @@ from sim_support.simulator import Simulator
 # ======================
 import taichi as ti
 import findiff
-import matplotlib as mpl
-mpl.use('qt5agg')
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
@@ -84,12 +84,12 @@ class SimulatorTaichiUnsplit(Simulator):
         def lap(u, xyz):
             lp = ti.static(Nd) * ti.static(fd[0]) * u[xyz]
             for nc in ti.static(range(1, Nc)):  # compile-time loop unrolling
-                for k in ti.static(range(Nd)):
-                    xyz[k] += nc
+                for nd in ti.static(range(Nd)):
+                    xyz[nd] += nc
                     a = u[xyz]
-                    xyz[k] -= 2 * nc
+                    xyz[nd] -= 2 * nc
                     lp += ti.static(fd[nc]) * (a + u[xyz])
-                    xyz[k] += nc
+                    xyz[nd] += nc
             return lp
 
         @ti.kernel
@@ -98,7 +98,7 @@ class SimulatorTaichiUnsplit(Simulator):
                 u_0[xyz] = 2 * u_1[xyz] - u_2[xyz] + c2[xyz] * lap(u_1, xyz)
                 for ns in ti.static(range(Ns)):
                     if (xyz == xyz_s[ns]).all():
-                        u_0[xyz] += source[nt]
+                        u_0[xyz] += self._dt * source[nt]
                 for nr in ti.static(range(Nr)):
                     if (xyz == xyz_r[nr]).all():
                         receiver[nt, nr] = u_0[xyz]
