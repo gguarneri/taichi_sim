@@ -25,16 +25,16 @@
         "id": "probe_emitter",
         "emitter": "True",
         "receiver": "False",
-        "freq": 35.0,
+        "freq": 50.0,
         "bw": 0.9,
-        "gain": 1.0e8,
+        "gain": 1.0e5,
         "pulse_type": "gaussian",
         "coord_center": [
           600.0,
           0.0,
           600.0
         ],
-        "t0_emission": 0.0342857142857
+        "t0_emission": 0.04
       }
     },
     {
@@ -52,8 +52,8 @@
   ],
   "simul_params":
   {
-    "time_steps": 1500,
-    "dt": 5.2e-4,
+    "time_steps": 2000,
+    "dt": 2.6e-4,
     "acc": 2,
     "it_display": 10
   },

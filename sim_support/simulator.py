@@ -126,13 +126,17 @@ class Simulator:
 
         # Configuracao dos transdutores
         self._probes = list()
+        self._gain = flt32(0.0)
         probes_cfg = self._configs["probes"]
-        for p in probes_cfg:
+        for idx_p, p in enumerate(probes_cfg):
             if "linear" in p:
                 self._probes.append(SimulationProbeLinearArray(**p["linear"], dec=self._roi.get_dec()))
             elif "point" in p:
                 self._probes.append(SimulationProbePoint(**p["point"], dec=self._roi.get_dec()))
                 
+            self._gain = max(self._gain, flt32(self._probes[idx_p]._gain) if hasattr(self._probes[idx_p], "_gain") else 0.0)
+
+
         # Pega as listas de todos os pontos transmissores e receptores de todos os transdutores configurados
         i_probe_tx_ptos = list()
         i_probe_rx_ptos = list()
@@ -276,6 +280,7 @@ class Simulator:
     def run(self):
         now = datetime.now()
         sim_times = list()
+        mse_values = list()
         for n in range(self._n_iter):
             print(f'Iteracao {n}')
             n_laws = self._emission_laws.shape[0] if hasattr(self, "_emission_laws") else 1
@@ -289,11 +294,37 @@ class Simulator:
                 results_dict = self.implementation()
                 sim_times.append(results_dict["sim_time"])
                 
+                # Imprime algumas informacoes e cria o nome base dos arquivos de resultados
                 print(results_dict["gpu_str"])
                 print(f'{sim_times[-1]:.3}s')
-                result_dir = self._results_dir if hasattr(self, "results_dir") else "."
+                result_dir = self._results_dir if hasattr(self, "_results_dir") else "."
                 name = (f'{result_dir}/result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_law_{law}')
+
+                # Compara o resultado com a referencia (CPU-broadcast)
+                try:
+                    # Compara o resultado do campo de pressao com o valor de referência
+                    pressure_ref = np.load(result_dir + "/result_ref_field_pressure.npy")
+                    pressure = results_dict["pressure"]
+                    if pressure_ref.shape == pressure.shape:
+                        mse_pressure = np.mean((pressure_ref - pressure) ** 2)
+                    else:
+                        mse_pressure = np.inf
+
+                    # Compara o resultado dos sensores de pressao com o valores de referência
+                    sens_pressure_ref = np.load(result_dir + "/result_ref_bscan_pressure.npy")
+                    sens_pressure = results_dict["sens_pressure"]
+                    if sens_pressure_ref.shape == sens_pressure.shape:
+                        mse_sens_pressure = np.mean((sens_pressure_ref - sens_pressure) ** 2)
+                    else:
+                        mse_sens_pressure = np.inf
+
+                    print(f"MSE do campo de pressao em relacao a referencia: {mse_pressure:.4}")
+                    print(f"MSE dos sensores de pressao em relacao a referencia: {mse_sens_pressure:.4}")
+                    mse_values.append([mse_pressure, mse_sens_pressure])
+
+                except FileNotFoundError as err:
+                    print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
 
                 # Plota o mapa de pressao
                 if self._plot_results:
@@ -309,16 +340,24 @@ class Simulator:
                     if self._show_figs:
                         plt.show(block=False)
 
+                    # Salva a imagem do campo de pressao
                     if self._save_results:
-                        pressure_sim_result.savefig(name + '_Pressure.png')
+                        pressure_sim_result.savefig(name + '_field_pressure.png')
 
-                # Plota os sinais tomados no sensores
+                # Salva o campo de pressao
+                if self._save_results:
+                    np.save(name + '_field_pressure', results_dict["pressure"])
+
+                # Plota individualmente os sinais tomados no sensores
                 if self._plot_sensors:
-                    sensors_result = list()
                     for r in range(results_dict["sens_pressure"].shape[1]):
                         sensor_pressure_result = plt.figure()
                         plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
                         plt.plot(results_dict["sens_pressure"][:, r])
+
+                        # Salva a imagem do sensor
+                        if self._save_sensors:
+                                sensor_pressure_result.savefig(name + f'_sensor_{r}.png')
                         rd = self._dx * np.sqrt((self._ix_src - self._ix_rec)**2 + (
                         self._iy_src - self._iy_rec)**2)
                         td = rd / self._cp + self._probes[0]._t0_emission
@@ -330,30 +369,33 @@ class Simulator:
                     if self._show_figs:
                         plt.show(block=False)
 
-                    if self._save_sensors:
-                        for s in range(results_dict["sens_pressure"].shape[1]):
-                            try:
-                                sensors_result[s].savefig(name + f'_sensor_{s}.png')
-                            except IndexError:
-                                pass
-
                 if self._plot_bscan:
                     bscan_pressure_result = plt.figure()
                     plt.title(f'{self._name} simulation B-scan Pressure - law({law})\n({self._nx}x{self._ny})')
-                    plt.imshow(results_dict["pressure"], aspect='auto', cmap='viridis')
+                    plt.imshow(results_dict["sens_pressure"], aspect='auto', cmap='viridis')
                     plt.colorbar()
 
                     if self._show_figs:
                         plt.show(block=False)
 
+                    # Salva a imagem b-scan dos valores dos sensores de pressao
                     if self._save_bscan:
-                        np.save(name + '_bscan', results_dict["sens_pressure"])
+                        bscan_pressure_result.savefig(name + '_bscan_pressure.png')
+
+                # Salva o array com os valores dos sensores de pressao
+                if self._save_bscan:
+                    np.save(name + '_bscan_pressure', results_dict["sens_pressure"])
 
         sim_times = np.array(sim_times)
+        mse_values = np.array(mse_values)
 
         print(f'TEMPO - {self._n_steps} pontos de tempo')
         if self._n_iter > 5:
-            print(f'Media: {sim_times[5:].mean():.3}s (std = {sim_times[5:].std()})')
+            print(f'Tempo medio de execucao: {sim_times[5:].mean():.3}s (std = {sim_times[5:].std():.4})')
+
+        if self._n_iter > 5 and mse_values.shape[0] > 5:
+            print(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4} (std = {mse_values[5:, 0].std():.4})')
+            print(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4} (std = {mse_values[5:, 1].std():.4})')
 
         if self._save_results:
             name = (f'{result_dir}/result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
@@ -373,9 +415,17 @@ class Simulator:
                     f.write(results_dict["msg_impl"])
                 if self._n_iter > 5:
                     f.write(f'Tempo medio de execucao: {sim_times[5:].mean():.3}s\n')
-                    f.write(f'Desvio padrao: {sim_times[5:].std()}\n')
+                    f.write(f'Desvio padrao: {sim_times[5:].std():.4}\n')
+                    if mse_values.shape[0] > 5:
+                        f.write(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4}\n')
+                        f.write(f'Desvio padrao: {mse_values[5:, 0].std():.4}\n')
+                        f.write(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4}\n')
+                        f.write(f'Desvio padrao: {mse_values[5:, 1].std():.4}\n')
                 else:
                     f.write(f'Tempo execucao: {sim_times[-1]:.3}s\n')
+                    if mse_values.shape[0] > 0:
+                        f.write(f'MSE do campo de pressao: {mse_values[-1:, 0]:.4}\n')
+                        f.write(f'MSE medio dos sensores de pressao: {mse_values[-1:, 1]:.4}\n')
 
         if self._show_figs:
             plt.show(block=False)
