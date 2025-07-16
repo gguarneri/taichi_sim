@@ -11,7 +11,7 @@ from sim_support.simulator import Simulator
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-import findiff
+from findiff import coefficients as fdcoeffs
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
@@ -51,29 +51,30 @@ class SimulatorTaichiUnsplit(Simulator):
         Nr = len(xyz_r)  # Number of receivers
 
         c2 = ti.field(tiFtype, shape=Nxyz)
-        u_0 = ti.field(tiFtype, shape=Nxyz)
-        u_1 = ti.field(tiFtype, shape=Nxyz)
-        u_2 = ti.field(tiFtype, shape=Nxyz)
+        p_0 = ti.field(tiFtype, shape=Nxyz)
+        p_1 = ti.field(tiFtype, shape=Nxyz)
+        p_2 = ti.field(tiFtype, shape=Nxyz)
         source = ti.field(tiFtype, shape=self._n_steps)
-        source.from_numpy((self._dt * self._source_term).astype(npFtype))
+        source.from_numpy((self._dt**2 * self._source_term).astype(npFtype))
 
         receiver = ti.field(tiFtype, shape=(self._n_steps, self._n_rec))
 
-        fd_np = findiff.coefficients(deriv=2, acc=self._deriv_acc)['center']['coefficients'][self._deriv_acc//2:].astype(npFtype)
-        fd = tuple(fd_np)
+        offsets = tuple(np.arange(-self._deriv_acc//2, self._deriv_acc//2 + 1))
+        fd_np = fdcoeffs(deriv=2, offsets=offsets)["coefficients"][self._deriv_acc//2:]
+        fd = tuple(fd_np.astype(npFtype))
         Nc = len(fd)
 
-        u_0.fill(0.)
-        u_1.fill(0.)
-        u_2.fill(0.)
+        p_0.fill(0.)
+        p_1.fill(0.)
+        p_2.fill(0.)
         c2.fill(self._cp**2 * self._dt**2 / self._dx**2)
 
         @ti.kernel
         def c2_zero_boundaries():
             for xyz in ti.grouped(c2):
                 cond = False
-                for k in ti.static(range(Nd)):
-                    cond = cond or xyz[k] < self._deriv_acc - 1 or xyz[k] > Nxyz[k] - self._deriv_acc
+                for nd in ti.static(range(Nd)):
+                    cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
                 if cond:
                     c2[xyz] = 0.
 
@@ -91,22 +92,35 @@ class SimulatorTaichiUnsplit(Simulator):
                     xyz[nd] += nc
             return lp
 
+        # @ti.func
+        # def equal_coords_(c1, c2):
+        #     for nd in ti.static(range(Nd)):
+        #         if c1[nd] != c2[nd]:
+        #             return False
+        #     return True
+
+        # def equal_coords(c1, c2):
+        #     for nd in range(Nd):
+        #         if c1[nd] != c2[nd]:
+        #             return False
+        #     return True
+
         @ti.kernel
-        def update_fields(nt: int):
-            for xyz in ti.grouped(u_0):
-                u_0[xyz] = 2 * u_1[xyz] - u_2[xyz] + c2[xyz] * lap(u_1, xyz)
+        def update_p(nt: int):
+            for xyz in ti.grouped(p_0):
+                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + c2[xyz] * lap(p_1, xyz)
                 for ns in ti.static(range(Ns)):
-                    if (xyz == xyz_s[ns]).all():
-                        u_0[xyz] += self._dt * source[nt]
+                    if all(xyz == xyz_s[ns]):
+                        p_0[xyz] += source[nt]
                 for nr in ti.static(range(Nr)):
-                    if (xyz == xyz_r[nr]).all():
-                        receiver[nt, nr] = u_0[xyz]
+                    if all(xyz == xyz_r[nr]):
+                        receiver[nt, nr] = p_0[xyz]
 
         @ti.kernel
         def circulate_buffers():
-            for xyz in ti.grouped(u_0):
-                u_2[xyz] = u_1[xyz]
-                u_1[xyz] = u_0[xyz]
+            for xyz in ti.grouped(p_0):
+                p_2[xyz] = p_1[xyz]
+                p_1[xyz] = p_0[xyz]
 
         # Definicao dos limites para a plotagem dos campos
         v_max = 1.0
@@ -117,11 +131,11 @@ class SimulatorTaichiUnsplit(Simulator):
         iy_max = self._roi.get_iz_max()
         t_init = time()
         for nt in range(self._n_steps):
-            update_fields(nt)
+            update_p(nt)
             circulate_buffers()
             if self._show_anim:
                 if not nt % self._it_display:
-                    u_0np = u_0.to_numpy()[ix_min:ix_max, iy_min:iy_max]
+                    u_0np = p_0.to_numpy()[ix_min:ix_max, iy_min:iy_max]
                     self._windows_gpu[0].imv.setImage(u_0np, levels=[v_min, v_max])
                     self._app.processEvents()
 
@@ -129,7 +143,7 @@ class SimulatorTaichiUnsplit(Simulator):
 
         # "vx": vx, "vy": vy, "sens_vx": sens_vx, "sens_vy": sens_vy
         return {"sim_time": sim_time, "gpu_str": str(ti.lang.impl.current_cfg().arch),
-                "sens_pressure": receiver.to_numpy(), "pressure": u_0.to_numpy()}
+                "sens_pressure": receiver.to_numpy(), "pressure": p_0.to_numpy()}
 
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando

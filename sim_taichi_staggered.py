@@ -11,7 +11,7 @@ from sim_support.simulator import Simulator
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-import findiff
+from findiff import coefficients as fdcoeffs
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
@@ -62,16 +62,9 @@ class SimulatorTaichiStaggered(Simulator):
 
         receiver = ti.field(tiFtype, shape=(self._n_steps, self._n_rec))
 
-        self._deriv_acc = 2
-        offset = (np.concatenate((np.arange(-self._deriv_acc, 0), np.arange(self._deriv_acc))) + .5).astype(npFtype)
-        fd_np = findiff.coefficients(deriv=1, offsets=list(offset))["coefficients"][round(self._deriv_acc):].astype(npFtype)
-        # offset = (np.concatenate((np.arange(-2, 0), np.arange(2))) + .5).astype(npFtype)
-        # fd_np = findiff.coefficients(deriv=1, offsets=list(offset)) \
-        #             ["coefficients"][round(2):].astype(npFtype)
-        #fd_np = findiff.coefficients(deriv=2, acc=self._deriv_acc)['center']['coefficients'][self._deriv_acc//2:].astype(npFtype)
-        # fd_np = np.array([9.0 / 8.0, -1.0 / 24.0]).astype(npFtype)
-        fd = tuple(fd_np)
-        # print(fd)
+        offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
+        fd_np = fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:]
+        fd = tuple(fd_np.astype(npFtype))
         Nc = len(fd)
 
         p.fill(0.)
@@ -95,30 +88,6 @@ class SimulatorTaichiStaggered(Simulator):
 
         parameters_zero_boundaries()
 
-        # @ti.func
-        # def lap(u, xyz):
-        #     lp = ti.static(Nd) * ti.static(fd[0]) * u[xyz]
-        #     for nc in ti.static(range(1, Nc)):  # compile-time loop unrolling
-        #         for nd in ti.static(range(Nd)):
-        #             xyz[nd] += nc
-        #             a = u[xyz]
-        #             xyz[nd] -= 2 * nc
-        #             lp += ti.static(fd[nc]) * (a + u[xyz])
-        #             xyz[nd] += nc
-        #     return lp
-
-        # @ti.func
-        # def div(u, xyz):
-        #     d = 0.
-        #     for nc in ti.static(range(Nc)):
-        #         for nd in ti.static(range(Nd)):
-        #             xyz_p = xyz
-        #             xyz_m = xyz
-        #             xyz_p[nd] += nc + 1
-        #             xyz_m[nd] -= nc
-        #             d += ti.static(fd[nc]) * (u[nd, xyz_p] - u[nd, xyz_m])
-        #     return d
-
         @ti.func
         def D(nd, u, xyz, bf):
             d = 0.
@@ -141,7 +110,6 @@ class SimulatorTaichiStaggered(Simulator):
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p):
-                # p[xyz] -= K[xyz] * div(v, xyz)
                 for nd in ti.static(range(Nd)):
                     p[xyz] -= c2[xyz] * D(nd, v[nd], xyz, 1)
                 for ns in ti.static(range(Ns)):
@@ -155,13 +123,7 @@ class SimulatorTaichiStaggered(Simulator):
         def update_v():
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
-                    #v[nd, xyz] -= rho_[xyz] * D(nd, p, xyz)
                     v[nd][xyz] -= dtOdx * D(nd, p, xyz, 0)
-        # @ti.kernel
-        # def circulate_buffers():
-        #     for xyz in ti.grouped(u_0):
-        #         u_2[xyz] = u_1[xyz]
-        #         u_1[xyz] = u_0[xyz]
 
         # view = 10
         # vmm = 1e6
