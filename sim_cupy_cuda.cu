@@ -69,7 +69,7 @@ void pressure_kernel(
             value_dvx_dx[idx] = dvx_dx;
             value_dvy_dy[idx] = dvy_dy;
 
-            float pressure_new = pressure[idx] - kappa_unrelaxed[idx] * (dvx_dx + dvy_dy) * dt * one_dx * one_dy;
+            float pressure_new = pressure[idx] + kappa_unrelaxed[idx] * (dvx_dx + dvy_dy) * dt * one_dx * one_dy;
             pressure[idx] = pressure_new;
         }
     }
@@ -111,7 +111,7 @@ void pressure_kernel(
             dpressure_dx = dpressure_dx / k_x[x - offset] + mdpressure_dx_new;
             value_dpressure_dx[idx] = dpressure_dx;
 
-            float vx_new = vx[idx] - dt * (dpressure_dx / rho_grid_vx[idx]);
+            float vx_new = vx[idx] + dt * (dpressure_dx / rho_grid_vx[idx]);
             vx[idx] = vx_new;
         }
     }
@@ -153,7 +153,7 @@ void pressure_kernel(
             dpressure_dy = dpressure_dy / k_y_half[y-offset] + mdpressure_dy_new;
             value_dpressure_dy[idx] = dpressure_dy;
 
-            float vy_new = vy[idx] - dt * (dpressure_dy / rho_grid_vy[idx]);
+            float vy_new = vy[idx] + dt * (dpressure_dy / rho_grid_vy[idx]);
             vy[idx] =  vy_new;
         }
     }

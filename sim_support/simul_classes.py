@@ -453,15 +453,15 @@ class ElementRect:
     def get_element_exc_fn(self, t, out='r'):
         dt = t[1] - t[0]
         gp, _, egp = gausspulse((t - self.t0), fc=self.freq, bw=self.bw, retquad=True, retenv=True)
-        eps = np.finfo(np.float32).eps
+        eps = np.finfo(flt32).eps
         if out == 'e':
             egp[np.abs(egp) < eps] = 0.0
-            ss = egp
+            ss = flt32(egp)
         else:
             gp[np.abs(gp) < eps] = 0.0
-            ss = gp
+            ss = flt32(gp)
 
-        return np.diff(self.gain * np.float32(ss) / dt, append=0.0).astype(np.float32)
+        return np.diff(self.gain * np.float32(ss) / dt, append=0.0).astype(flt32)
 
     def get_num_points_roi(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
@@ -988,20 +988,19 @@ class SimulationProbePoint(SimulationProbe):
         :return: :numpy.array
         Array contém dimensões as N amostras de tempo.
         """
-        t = np.arange(samples, dtype=np.float32) * dt
-        source_term = np.zeros(samples, dtype=np.float32)
+        t = np.arange(samples, dtype=flt32) * dt
+        ss = np.zeros(samples, dtype=flt32)
         if self.emitters[0]:
-            dt = t[1] - t[0]
             gp, _, egp = gausspulse((t - self._t0_emission), fc=self._freq, bw=self._bw, retquad=True, retenv=True)
-            eps = np.finfo(np.float32).eps
+            eps = np.finfo(flt32).eps
             if out == 'e':
                 egp[np.abs(egp) < eps] = 0.0
-                source_term = np.float32(egp)
+                ss = flt32(egp)
             else:
                 gp[np.abs(gp) < eps] = 0.0
-                source_term = np.float32(gp)
+                ss = flt32(gp)
 
-        return source_term * self._gain
+        return np.diff(self._gain * flt32(ss) / dt, append=0.0).astype(flt32)
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """

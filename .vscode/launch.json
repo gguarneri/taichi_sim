@@ -27,6 +27,39 @@
             "program": "${workspaceFolder}/sim_cupy_cuda.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CuPy-rawkernel",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cupy_rawkernel.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto Numba",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_numba.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json",
+            "env": {"NUMBA_ENABLE_CUDASIM": "0"}
+        },
+        {
+            "name": "Ponto CPU-broadcast",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_broadcast.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CPU-conv",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_conv.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         }
     ]
 }
