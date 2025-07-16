@@ -44,8 +44,9 @@ class SimulatorCupyCuda(Simulator):
         vp = torch.from_numpy(self._cp_grid_vx).to(device)
 
         # Campos
-        u = torch.zeros(Nx, Nz, device=device)
-        u_0 = torch.zeros_like(u)
+        p = torch.zeros(Nx, Nz, device=device) # pressão
+        vx = torch.zeros(Nx, Nz, device=device) # velocidade x
+        vz = torch.zeros(Nx, Nz, device=device) # velocidade y
 
         # Arrays para os sensores
         sens_pressure = np.zeros((self._n_steps, self._n_rec), dtype=flt32)
@@ -62,41 +63,49 @@ class SimulatorCupyCuda(Simulator):
         if self._n_pto_src == 1:
             self._source_term = self._source_term[:, np.newaxis]
             
-        # Kernels
-        kernel_1d = torch.tensor([-1/560, 8/315, -1/5, 8/5, -205/72, 8/5, -1/5, 8/315, -1/560], device=device)
 
-        def laplacian(x):
-            x = x.unsqueeze(0).unsqueeze(0)
-            kernel = kernel_1d.view(1, 1, -1, 1)  # derivada em x
-            d2x = F.conv2d(x, kernel, padding=(kernel.shape[2]//2, 0))
+        def deriv(x, axis):
+            # Kernels de derivada
+            kernel = torch.tensor([1/280, -4/105, 1/5, -4/5, 0, 4/5, -1/5, 4/105, -1/280], device=device)
             
-            kernel = kernel_1d.view(1, 1, 1, -1)  # derivada em z
-            d2z = F.conv2d(x, kernel, padding=(0, kernel.shape[3]//2))
-
-            return (d2x + d2z).squeeze(0).squeeze(0)
+            x = x.unsqueeze(0).unsqueeze(0)
+            if axis == "x":
+                kernel = kernel.view(1, 1, -1, 1)  # derivada em x
+                d2x = F.conv2d(x, kernel, padding=(kernel.shape[2]//2, 0))
+                return d2x.squeeze(0).squeeze(0)
+            
+            elif axis == "z":
+                kernel = kernel.view(1, 1, 1, -1)  # derivada em z
+                d2z = F.conv2d(x, kernel, padding=(0, kernel.shape[3]//2))
+                return d2z.squeeze(0).squeeze(0)
 
         # Laco de tempo para execucao da simulacao
         t_sim_start = time()
         for n in range(Nt):
             
-            lap_u = laplacian(u)
-            u_1 = vp**2 * dt**2 / (dx*dz) * lap_u + 2 * u - u_0
-                
+            dvxdx = deriv(vx, "x") / dx
+            dvzdz = deriv(vz, "z") / dz
+            
+            p += dt * vp**2 * (dvxdx + dvzdz)
+            
             for _isrc in range(self._n_pto_src):
-                u_1[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[n - 1, _isrc] * 
+                p[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[n - 1, _isrc] * 
                                                                            dt * self._one_dx * self._one_dy)
-
-            u_0 = u
-            u = u_1
+            
+            dpdx = deriv(p, "x") / dx
+            dpdz = deriv(p, "z") / dz
+            
+            vx += self._dt * (dpdx)
+            vz += self._dt * (dpdz)
 
             for _i in range(self._idx_rec.shape[0]):
                 _irec = self._idx_rec[_i]
                 if n >= self._delay_recv[_irec]:
                     _x = self._ix_rec[_i]
                     _y = self._iy_rec[_i]
-                    sens_pressure[n - 1, _irec] += u[_x, _y]
+                    sens_pressure[n - 1, _irec] += p[_x, _y]
 
-            psn2 = torch.max(torch.abs(u))
+            psn2 = torch.max(torch.abs(p))
             if (n % self._it_display) == 0 or n == 5:
                 if self._show_debug:
                     print(f"Time step {n} out of {self._n_steps}")
@@ -104,7 +113,7 @@ class SimulatorCupyCuda(Simulator):
 
                 if self._show_anim:
                     self._windows_gpu[-1].imv.setImage(
-                        u[ix_min:ix_max, iy_min:iy_max].detach().cpu().numpy(),
+                        p[ix_min:ix_max, iy_min:iy_max].detach().cpu().numpy(),
                         levels=[v_min, v_max],
                     )
                     self._app.processEvents()
@@ -118,7 +127,7 @@ class SimulatorCupyCuda(Simulator):
         return {
             "vx": None,
             "vy": None,
-            "pressure": u.detach().cpu().numpy(),
+            "pressure": p.detach().cpu().numpy(),
             "sens_vx": None,
             "sens_vy": None,
             "sens_pressure": sens_pressure,
