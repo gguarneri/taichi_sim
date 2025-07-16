@@ -89,7 +89,7 @@ class SimulatorCupyCuda(Simulator):
             p += dt * vp**2 * (dvxdx + dvzdz)
             
             for _isrc in range(self._n_pto_src):
-                p[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[n - 1, _isrc] * 
+                p[self._ix_src[_isrc], self._iy_src[_isrc]] -= (self._source_term[n - 1, _isrc] * 
                                                                            dt * self._one_dx * self._one_dy)
             
             dpdx = deriv(p, "x") / dx

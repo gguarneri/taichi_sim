@@ -1000,7 +1000,9 @@ class SimulationProbePoint(SimulationProbe):
                 gp[np.abs(gp) < eps] = 0.0
                 ss = flt32(gp)
 
-        return np.diff(self._gain * flt32(ss) / dt, append=0.0).astype(flt32)
+        gauswavf = np.diff(self._gain * np.float32(ss) / dt, append=0.0).astype(flt32)
+        ricker = np.diff(gauswavf / dt, append=0.0).astype(flt32)
+        return ricker
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
