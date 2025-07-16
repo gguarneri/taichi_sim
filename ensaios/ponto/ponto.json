@@ -14,7 +14,7 @@
       "len_pml_ymax" : 0,
       "len_pml_zmin" : 18,
       "len_pml_zmax" : 18,
-      "rcoef_pml": 1e-15,
+      "rcoef_pml": 0.0001,
       "npower_pml": 2.0,
       "k_max_pml": 1.0
     },
@@ -25,10 +25,8 @@
         "id": "probe_emitter",
         "emitter": "True",
         "receiver": "False",
-        "freq": 35.0,
         "freq": 50.0,
         "bw": 0.9,
-        "gain": 1.0e8,
         "gain": 1.0e5,
         "pulse_type": "gaussian",
         "coord_center": [
@@ -36,11 +34,7 @@
           0.0,
           600.0
         ],
-<<<<<<< HEAD
-        "t0_emission": 0.0603174603175
-=======
         "t0_emission": 0.04
->>>>>>> main
       }
     },
     {
@@ -58,8 +52,6 @@
   ],
   "simul_params":
   {
-    "time_steps": 1500,
-    "dt": 5.2e-4,
     "time_steps": 2000,
     "dt": 2.6e-4,
     "acc": 2,
@@ -87,7 +79,7 @@
   },
   "specimen_params":
   {
-    "cp": 1500.0,
+    "cp": 2000.0,
     "rho": 2000.0
   }
 }
