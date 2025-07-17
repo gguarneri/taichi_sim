@@ -232,8 +232,8 @@ sim_instance = SimulatorCPUNumpy(args.config)
 
 #%% Executa simulacao
 try:
-    sim_instance.run()
-    # pass
+    # sim_instance.run()
+    pass
 
 except KeyError as key:
     print(f"Chave {key} nao encontrada no arquivo de configuracao.")

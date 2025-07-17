@@ -1,6 +1,6 @@
 {  "matplotlib" :
   {
-    "use": ""
+    "use": "Qt5Agg"
   },
   "roi" :
     {
@@ -82,7 +82,7 @@
   },
   "specimen_params":
   {
-    "cp": 1500.0,
+    "cp": 2000.0,
     "rho": 2000.0
   }
 }
