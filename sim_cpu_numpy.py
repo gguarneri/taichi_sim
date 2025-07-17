@@ -13,8 +13,6 @@ from sim_support.simulator import Simulator
 import findiff
 from scipy.ndimage import correlate
 
-
-#%%
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
@@ -40,10 +38,20 @@ class SimulatorCPUNumpy(Simulator):
             Nxyz = self._nx, self._ny, self._nz
             xyz_s = self._ix_src, self._iy_src, self._iz_src
             xyz_r = self._ix_rec, self._iy_rec, self._iz_rec
+            Nxyz_abc = (((self._roi._pml_xmin_len, self._ny, self._nz), (self._roi._pml_xmax_len, self._ny, self._nz)),
+                        ((self._nx, self._roi._pml_ymin_len, self._nz), (self._nx, self._roi._pml_ymax_len, self._nz)),
+                        ((self._nx, self._ny, self._roi._pml_ymin_len), (self._nx, self._ny, self._roi._pml_ymax_len)))
+
         except AttributeError:
             Nxyz = self._nx, self._ny
             xyz_s = self._ix_src, self._iy_src
             xyz_r = self._ix_rec, self._iy_rec
+            Nxyz_abc = (((self._roi._pml_xmin_len, self._ny), (self._roi._pml_xmax_len, self._ny)),
+                        ((self._nx, self._roi._pml_ymin_len), (self._nx, self._roi._pml_ymax_len)))
+
+        # Nxyz_abc = (((18, 816), (18, 816)), ((816, 0), (816, 0)))
+
+        psi_p = [[np.zeros(lr, dtype=npFtype) for lr in nxyz] for nxyz in Nxyz_abc]
 
         xyz_s = tuple(tuple(i) for i in np.array(xyz_s).T)  # Coordinates of sources
         xyz_r = tuple(tuple(i) for i in np.array(xyz_r).T)  # Coordinates of receivers
@@ -215,7 +223,8 @@ class SimulatorCPUNumpy(Simulator):
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
+default_config_file = "ensaios/ponto/ponto.json"
+parser.add_argument('-c', '--config', help='Configuration file', default=default_config_file)
 args = parser.parse_args()
 
 # Cria a instancia do simulador
@@ -224,6 +233,7 @@ sim_instance = SimulatorCPUNumpy(args.config)
 #%% Executa simulacao
 try:
     sim_instance.run()
+    # pass
 
 except KeyError as key:
     print(f"Chave {key} nao encontrada no arquivo de configuracao.")

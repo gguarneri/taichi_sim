@@ -38,10 +38,16 @@ class SimulatorTaichiStaggered(Simulator):
             Nxyz = self._nx, self._ny, self._nz
             xyz_s = self._ix_src, self._iy_src, self._iz_src
             xyz_r = self._ix_rec, self._iy_rec, self._iz_rec
+            Nxyz_abc = (((self._roi._pml_xmin_len, self._ny, self._nz), (self._roi._pml_xmax_len, self._ny, self._nz)),
+                        ((self._nx, self._roi._pml_ymin_len, self._nz), (self._nx, self._roi._pml_ymax_len, self._nz)),
+                        ((self._nx, self._ny, self._roi._pml_ymin_len), (self._nx, self._ny, self._roi._pml_ymax_len)))
+
         except AttributeError:
             Nxyz = self._nx, self._ny
             xyz_s = self._ix_src, self._iy_src
             xyz_r = self._ix_rec, self._iy_rec
+            Nxyz_abc = (((self._roi._pml_xmin_len, self._ny), (self._roi._pml_xmax_len, self._ny)),
+                        ((self._nx, self._roi._pml_ymin_len), (self._nx, self._roi._pml_ymax_len)))
 
         xyz_s = tuple(tuple(i) for i in np.array(xyz_s).T)  # Coordinates of sources
         xyz_r = tuple(tuple(i) for i in np.array(xyz_r).T)  # Coordinates of receivers
@@ -55,7 +61,6 @@ class SimulatorTaichiStaggered(Simulator):
         # K = ti.field(tiFtype, shape=Nxyz)
         p = ti.field(tiFtype, shape=Nxyz)
         v = [ti.field(tiFtype, shape=Nxyz) for _ in range(Nd)]
-        #u_2 = ti.field(tiFtype, shape=Nxyz)
         source = ti.field(tiFtype, shape=self._n_steps)
         source.from_numpy((self._dt * np.cumsum(self._source_term * self._dt)).astype(npFtype))
         # source.from_numpy((self._source_term * self._dt).astype(npFtype))
@@ -112,6 +117,7 @@ class SimulatorTaichiStaggered(Simulator):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
                     p[xyz] -= c2[xyz] * D(nd, v[nd], xyz, 1)
+                    N
                 for ns in ti.static(range(Ns)):
                     if (xyz == xyz_s[ns]).all():
                         p[xyz] += source[nt]
@@ -168,7 +174,10 @@ class SimulatorTaichiStaggered(Simulator):
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
+# parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
+default_config_file = "ensaios/ponto/ponto.json"
+parser.add_argument('-c', '--config', help='Configuration file', default=default_config_file)
+
 args = parser.parse_args()
 
 # Cria a instancia do simulador

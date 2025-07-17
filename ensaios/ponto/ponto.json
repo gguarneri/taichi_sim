@@ -1,4 +1,7 @@
-{
+{  "matplotlib" :
+  {
+    "use": ""
+  },
   "roi" :
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],

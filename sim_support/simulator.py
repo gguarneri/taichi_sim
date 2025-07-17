@@ -11,12 +11,7 @@ import pyqtgraph as pg
 from sim_support import *
 from sim_support.emission_law import EmissionLaw
 from sim_support.windows_qt import Window
-from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint)   
-        
-import platform
-if platform.system() == "Darwin":
-    import matplotlib as mpl
-    mpl.use('Qt5Agg')
+from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint)
 
 class Simulator:
     def __init__(self, file_config):
@@ -29,7 +24,16 @@ class Simulator:
         # -----------------------
         with open(file_config, 'r') as f:
             self._configs = ast.literal_eval(f.read())
-            
+
+        try:
+            self._mpl_use = self._configs["matplotlib"]["use"]
+        except KeyError:
+            self._mpl_use = ""
+
+        if self._mpl_use:
+            import matplotlib as mpl
+            mpl.use(self._mpl_use)
+
         # Configuracao da simulacao
         self._deriv_acc = self._configs["simul_params"]["acc"] if "acc" in self._configs["simul_params"] else 2
         try:
@@ -362,9 +366,9 @@ class Simulator:
                         self._iy_src - self._iy_rec)**2)
                         td = rd / self._cp + self._probes[0]._t0_emission
                         ntd = td / self._dt
-                        #print(ntd, self._ix_src, self._iy_src, self._ix_rec, self._iy_rec)
+                        # print(ntd, self._ix_src, self._iy_src, self._ix_rec, self._iy_rec)
                         plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]), np.max(results_dict["sens_pressure"][:, r])], label="Posição esperada eco")
-                        sensors_result.append(sensor_pressure_result)
+                        # sensors_result.append(sensor_pressure_result)
 
                     if self._show_figs:
                         plt.show(block=False)
