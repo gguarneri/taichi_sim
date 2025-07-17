@@ -40,6 +40,8 @@ class SimulatorTaichiStaggered(Simulator):
         p = ti.field(st.tiFtype, shape=st.Nxyz)
         v = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
         b = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        psi_p = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        psi_v = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
         source = ti.field(st.tiFtype, shape=self._n_steps)
         source.from_numpy((self._dt * np.cumsum(self._source_term * self._dt)).astype(st.npFtype))
         # source.from_numpy((self._source_term * self._dt).astype(st.npFtype))
@@ -49,6 +51,8 @@ class SimulatorTaichiStaggered(Simulator):
         p.fill(0.)
         for nd in range(st.Nd):
             v[nd].fill(0.)
+            psi_p[nd].fill(0.)
+            psi_v[nd].fill(0.)
             b[nd].from_numpy(st.b[nd])
         c2.fill(self._cp ** 2 * self._dt / self._dx)
         # rho_.fill(self._dt / (self._rho * self._dx))
@@ -61,7 +65,9 @@ class SimulatorTaichiStaggered(Simulator):
         def update_p(nt: int):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(st.Nd)):
-                    p[xyz] -= c2[xyz] * st.D(nd, v[nd], xyz, 1)
+                    tmp = st.D(nd, v[nd], xyz, 1)
+                    p[xyz] -= c2[xyz] * (tmp + psi_v[nd][xyz])
+                    psi_v[nd][xyz] = b[nd][xyz] * psi_v[nd][xyz] + (b[nd][xyz] - 1) * tmp
                 for ns in ti.static(range(st.Ns)):
                     if all(xyz == st.xyz_s[ns]):
                         p[xyz] += source[nt]
@@ -73,7 +79,9 @@ class SimulatorTaichiStaggered(Simulator):
         def update_v():
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(st.Nd)):
-                    v[nd][xyz] -= dtOdx * st.D(nd, p, xyz, 0)
+                    tmp = st.D(nd, p, xyz, 0)
+                    v[nd][xyz] -= dtOdx * (tmp + psi_p[nd][xyz])
+                    psi_p[nd][xyz] = b[nd][xyz] * psi_p[nd][xyz] + (b[nd][xyz] - 1) * tmp
 
         t_init = time()
         for nt in range(self._n_steps):

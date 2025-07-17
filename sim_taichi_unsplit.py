@@ -38,8 +38,8 @@ class SimulatorTaichiUnsplit(Simulator):
         p_0 = ti.field(st.tiFtype, shape=st.Nxyz)
         p_1 = ti.field(st.tiFtype, shape=st.Nxyz)
         p_2 = ti.field(st.tiFtype, shape=st.Nxyz)
-        psi = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
-        phi = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        phi_dp = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        phi_p = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
         dp = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
         b = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
         source = ti.field(st.tiFtype, shape=self._n_steps)
@@ -50,8 +50,8 @@ class SimulatorTaichiUnsplit(Simulator):
         p_1.fill(0.)
         p_2.fill(0.)
         for nd in range(st.Nd):
-            psi[nd].fill(0.)
-            phi[nd].fill(0.)
+            phi_dp[nd].fill(0.)
+            phi_p[nd].fill(0.)
             dp[nd].fill(0.)
             b[nd].from_numpy(st.b[nd])
 
@@ -64,8 +64,8 @@ class SimulatorTaichiUnsplit(Simulator):
                 tmp1 = 0.
                 for nd in ti.static(range(st.Nd)):
                     tmp2 = st.D(nd, dp[nd], xyz, 1)
-                    psi[nd][xyz] = b[nd][xyz] * psi[nd][xyz] + (b[nd][xyz] - 1) * tmp2
-                    tmp1 += psi[nd][xyz] + tmp2
+                    phi_dp[nd][xyz] = b[nd][xyz] * phi_dp[nd][xyz] + (b[nd][xyz] - 1) * tmp2
+                    tmp1 += phi_dp[nd][xyz] + tmp2
 
                 p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + c2[xyz] * tmp1
 
@@ -85,8 +85,8 @@ class SimulatorTaichiUnsplit(Simulator):
             for xyz in ti.grouped(p_0):
                 for nd in ti.static(range(st.Nd)):
                     dp[nd][xyz] = st.D(nd, p_0, xyz, 0)
-                    phi[nd][xyz] = b[nd][xyz] * phi[nd][xyz] + (b[nd][xyz] - 1) * dp[nd][xyz]
-                    dp[nd][xyz] += phi[nd][xyz]
+                    phi_p[nd][xyz] = b[nd][xyz] * phi_p[nd][xyz] + (b[nd][xyz] - 1) * dp[nd][xyz]
+                    dp[nd][xyz] += phi_p[nd][xyz]
 
         t_init = time()
         for nt in range(self._n_steps):
