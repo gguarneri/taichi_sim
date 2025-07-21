@@ -1,135 +1,140 @@
-# from sim_support.simulator import Simulator
+# =======================
+# Importacao de pacotes de uso geral
+# =======================
+# import argparse
+# from time import time
 import numpy as np
+# from sim_support import *
+from sim_support.simulator import Simulator
+
+# ======================
+# Importacao de pacotes especificos para a implementacao do simulador
+# ======================
 import taichi as ti
 from findiff import coefficients as fdcoeffs
 
-# view = 10
-# vmm = 1e6
-# cmap = mpl.colormaps['bwr']
-# norm = lambda x: .5 + x / (2 * vmm)
-# window = ti.ui.Window(name="Wave", res=st.Nxyz[0:2], pos=(0, 0))
-# canvas = window.get_canvas()
-# Definicao dos limites para a plotagem dos campos
+# -----------------------------------------------------------------------------
+# Aqui deve ser implementado o simulador como uma classe herdada de Simulator
+# -----------------------------------------------------------------------------
 
-deriv_acc = None
-fdstg = None
-Ncstg = 0
-Nxyz = None
-Nd = None
-xyz_s = None
-xyz_r = None
-tiFtype = ti.float32
-npFtype = np.float32
-Ns = 0
-Nr = 0
-b = None
-v_max = None
-v_min = None
-ix_min = None
-ix_max = None
-iy_min = None
-iy_max = None
+@ti.data_oriented
+class SimulatorTaichiCommon(Simulator):
+    def __init__(self, file_config):
+        # Chama do construtor padrao, que le o arquivo de configuracao
+        super().__init__(file_config)
 
-def init(self):
-    global deriv_acc, fdstg, Ncstg, Nxyz, Nd, xyz_s, xyz_r, Ns, Nr, b
-    global v_max, v_min, ix_min, ix_max, iy_min, iy_max
+        # Define o nome do simulador
+        self._name = "Taichi Common"
 
-    deriv_acc = self._deriv_acc
-    offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
-    fd_np = fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:]
-    fdstg = tuple(fd_np.astype(npFtype))
-    Ncstg = len(fdstg)
+        self._npFtype = np.float32
+        self._tiFtype = ti.float32
 
-    try:
-        Nxyz = self._nx, self._ny, self._nz
-        Nd = len(Nxyz)  # Number of dimensions
-        xyz_s = self._ix_src, self._iy_src, self._iz_src
-        xyz_r = self._ix_rec, self._iy_rec, self._iz_rec
-        # Nxyz_abc = (((self._roi._pml_xmin_len, self._ny, self._nz), (self._roi._pml_xmax_len, self._ny, self._nz)),
-        #             ((self._nx, self._roi._pml_ymin_len, self._nz), (self._nx, self._roi._pml_ymax_len, self._nz)),
-        #             ((self._nx, self._ny, self._roi._pml_ymin_len), (self._nx, self._ny, self._roi._pml_ymax_len)))
+        try: self._Nxyz = (self._nx,); self._Nxyz += (self._ny,); self._Nxyz += (self._nz,)
+        except AttributeError: pass
 
-    except AttributeError:
-        Nxyz = self._nx, self._ny
-        Nd = len(Nxyz)  # Number of dimensions
-        xyz_s = self._ix_src, self._iy_src
-        xyz_r = self._ix_rec, self._iy_rec
-        # Nxyz_abc = (((self._roi._pml_xmin_len, self._ny), (self._roi._pml_xmax_len, self._ny)),
-        #             ((self._nx, self._roi._pml_ymin_len), (self._nx, self._roi._pml_ymax_len)))
-        bx = np.zeros((Nxyz[0], 1), dtype=npFtype)
-        by = np.zeros((1, Nxyz[1]), dtype=npFtype)
+        try: self._xyz_s = (self._ix_src,); self._xyz_s += (self._iy_src,); self._xyz_s += (self._iz_src,)
+        except AttributeError: pass
+
+        try: self._xyz_r = (self._ix_rec,); self._xyz_r += (self._iy_rec,); self._xyz_r += (self._iz_rec,)
+        except AttributeError: pass
+
+        self._xyz_s = tuple(tuple(i) for i in np.array(self._xyz_s).T)  # Coordinates of sources
+        self._xyz_r = tuple(tuple(i) for i in np.array(self._xyz_r).T)  # Coordinates of receivers
+
+        offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
+        self._c = tuple(fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:].astype(self._npFtype))
+
+        ti.init(arch=ti.gpu)
+
+        self._c2 = ti.field(self._tiFtype, shape=self._Nxyz)
+        #self._c2.fill(self._cp**2 * self._dt**2 / self._dx**2)
+        self._c2.fill(self._cp**2)
+        self.zero_boundaries(self._c2)
+
+        if self._source_term.ndim == 1:
+            self._source_term = self._source_term[np.newaxis]
+        self._source_dp = [ti.field(self._tiFtype, shape=self._n_steps) for _ in range(self._n_src)]
+        self._source_d2p = [ti.field(self._tiFtype, shape=self._n_steps) for _ in range(self._n_src)]
+        for ns in range(self._n_src):
+            dp = np.diff(self._source_term[ns], prepend=0)
+            self._source_dp[ns].from_numpy(dp.astype(self._npFtype))
+            self._source_d2p[ns].from_numpy(np.diff(dp, prepend=0).astype(self._npFtype))
+        #self._receiver = [ti.field(self._tiFtype, shape=self._n_steps) for _ in range(self._n_rec)]
+        self._receiver = ti.field(self._tiFtype, shape=(self._n_steps, self._n_rec))
+
+        # ABC
+        bx = np.zeros((self._Nxyz[0], 1), dtype=self._npFtype)
+        by = np.zeros((1, self._Nxyz[1]), dtype=self._npFtype)
         bx[1:-1, :] = self._b_x
         by[:, 1:-1] = self._b_y
         b = [None, None]
-        b[0] = (bx @ np.ones(Nxyz[1])[np.newaxis]).astype(npFtype)
-        b[1] = (np.ones(Nxyz[0])[:, np.newaxis] @ by).astype(npFtype)
+        b[0] = (bx @ np.ones(self._Nxyz[1])[np.newaxis]).astype(self._npFtype)
+        b[1] = (np.ones(self._Nxyz[0])[:, np.newaxis] @ by).astype(self._npFtype)
+        self._b = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        for nd in range(len(self._Nxyz)):
+            self._b[nd].from_numpy(b[nd])
 
-    xyz_s = tuple(tuple(i) for i in np.array(xyz_s).T)  # Coordinates of sources
-    xyz_r = tuple(tuple(i) for i in np.array(xyz_r).T)  # Coordinates of receivers
+        # Definicao dos limites para a plotagem dos campos
+        self._v_max = 10_000.
+        self._v_min = - self._v_max
 
-    Ns = len(xyz_s)  # Number of sources
-    Nr = len(xyz_r)  # Number of receivers
+    @ti.func
+    def _D(self, nd, u, xyz, bf):
+        d = 0.
+        for nc in ti.static(range(len(self._c))):
+            # # Solution 1
+            # xyz_p = xyz[:]
+            # xyz_m = xyz[:]
+            # xyz_p[nd] += nc + bf
+            # xyz_m[nd] -= nc - bf + 1
+            # d += ti.static(fdstg[nc]) * (u[xyz_p] - u[xyz_m])
 
+            # # Solution 2
+            # xyz[nd] += nc + bf
+            # a = u[xyz]
+            # xyz[nd] += - 2 * nc - 1
+            # d += ti.static(fdstg[nc]) * (a - u[xyz])
+            # xyz[nd] += nc + 1 - bf
 
-    # Definicao dos limites para a plotagem dos campos
-    v_max = 1.0
-    v_min = - v_max
-    ix_min = self._roi.get_ix_min()
-    ix_max = self._roi.get_ix_max()
-    iy_min = self._roi.get_iz_min()
-    iy_max = self._roi.get_iz_max()
+            # Solution 3
+            xyz_tmp = xyz[:]
+            xyz_tmp[nd] += nc + bf
+            a = u[xyz_tmp]
+            xyz_tmp[nd] += - 2 * nc - 1
+            d += ti.static(self._c[nc]) * (a - u[xyz_tmp])
+        return d
 
-def show_anim(self, nt, u):
-    if self._show_anim:
+    @ti.kernel
+    def zero_boundaries(self, prmtr: ti.template()):
+        for xyz in ti.grouped(prmtr):
+            cond = False
+            for nd in ti.static(range(len(self._Nxyz))):
+                cond = cond or xyz[nd] < self._deriv_acc or xyz[nd] >= self._Nxyz[nd] - self._deriv_acc
+            if cond:
+                prmtr[xyz] = 0.
+
+    def _show_anim_func(self, nt, u):
         if not nt % self._it_display:
-            u_np = u.to_numpy()[ix_min:ix_max, iy_min:iy_max]
-            self._windows_gpu[0].imv.setImage(u_np, levels=[v_min, v_max])
+            # TODO: reavaliar xyz
+            u_np = u.to_numpy()[self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iz_min():self._roi.get_iz_max()]
+            self._windows_gpu[0].imv.setImage(u_np, levels=[self._v_min, self._v_max])
             self._app.processEvents()
+            # print("Showing animation...", u_np.shape, np.sum(u_np ** 2))
 
-@ti.func
-def D(nd, u, xyz, bf):
-    d = 0.
-    for nc in ti.static(range(Ncstg)):
-        # # Solution 1
-        # xyz_p = xyz[:]
-        # xyz_m = xyz[:]
-        # xyz_p[nd] += nc + bf
-        # xyz_m[nd] -= nc - bf + 1
-        # d += ti.static(fdstg[nc]) * (u[xyz_p] - u[xyz_m])
+    @ti.func
+    def _addSourceD2p(self, p, xyz, nt):
+        for ns in ti.static(range(self._n_src)):
+            if all(xyz == self._xyz_s[ns]):
+                p[xyz] += self._source_d2p[ns][nt]
 
-        # # Solution 2
-        # xyz[nd] += nc + bf
-        # a = u[xyz]
-        # xyz[nd] += - 2 * nc - 1
-        # d += ti.static(fdstg[nc]) * (a - u[xyz])
-        # xyz[nd] += nc + 1 - bf
+    @ti.func
+    def _addSourceDp(self, p, xyz, nt):
+        for ns in ti.static(range(self._n_src)):
+            if all(xyz == self._xyz_s[ns]):
+                p[xyz] += self._source_dp[ns][nt]
 
-        # Solution 3
-        xyz_tmp = xyz[:]
-        xyz_tmp[nd] += nc + bf
-        a = u[xyz_tmp]
-        xyz_tmp[nd] += - 2 * nc - 1
-        d += ti.static(fdstg[nc]) * (a - u[xyz_tmp])
-    return d
-
-
-@ti.kernel
-def parameters_zero_boundaries(prmtr: ti.template()):
-    for xyz in ti.grouped(prmtr):
-        cond = False
-        for nd in ti.static(range(Nd)):
-            cond = cond or xyz[nd] < deriv_acc or xyz[nd] >= Nxyz[nd] - deriv_acc
-        if cond:
-            prmtr[xyz] = 0.
-
-# @ti.func
-# def lap(u, xyz):
-#     lp = ti.static(Nd) * ti.static(fd[0]) * u[xyz]
-#     for nc in ti.static(range(1, Nc)):  # compile-time loop unrolling
-#         for nd in ti.static(range(Nd)):
-#             xyz[nd] += nc
-#             a = u[xyz]
-#             xyz[nd] -= 2 * nc
-#             lp += ti.static(fd[nc]) * (a + u[xyz])
-#             xyz[nd] += nc
-#     return lp
+    @ti.func
+    def _readSensors(self, p, xyz, nt):
+        for nr in ti.static(range(self._n_rec)):
+            if all(xyz == self._xyz_r[nr]):
+                self._receiver[nt, nr] = p[xyz]

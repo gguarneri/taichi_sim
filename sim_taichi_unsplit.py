@@ -11,93 +11,84 @@ from sim_support.simulator import Simulator
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
+import sim_taichi_common as stic
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
-class SimulatorTaichiUnsplit(Simulator):
+
+@ti.data_oriented
+class SimulatorTaichiUnsplit(stic.SimulatorTaichiCommon):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
         super().__init__(file_config)
 
         # Define o nome do simulador
         self._name = "Taichi Unsplit"
-
+        
     def implementation(self):
         super().implementation()
 
         # --------------------------------------------
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
-        import sim_taichi_common as st
 
-        st.init(self)
-        ti.init(arch=ti.gpu)
-
-        c2 = ti.field(st.tiFtype, shape=st.Nxyz)
-        p_0 = ti.field(st.tiFtype, shape=st.Nxyz)
-        p_1 = ti.field(st.tiFtype, shape=st.Nxyz)
-        p_2 = ti.field(st.tiFtype, shape=st.Nxyz)
-        phi_dp = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
-        phi_p = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
-        dp = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
-        b = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
-        source = ti.field(st.tiFtype, shape=self._n_steps)
-        source.from_numpy((self._dt**2 * self._source_term).astype(st.npFtype))
-        receiver = ti.field(st.tiFtype, shape=(self._n_steps, self._n_rec))
+        p_0 = ti.field(self._tiFtype, shape=self._Nxyz)
+        p_1 = ti.field(self._tiFtype, shape=self._Nxyz)
+        p_2 = ti.field(self._tiFtype, shape=self._Nxyz)
+        psi_dp = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        psi_p = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        dp = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
 
         p_0.fill(0.)
         p_1.fill(0.)
         p_2.fill(0.)
-        for nd in range(st.Nd):
-            phi_dp[nd].fill(0.)
-            phi_p[nd].fill(0.)
+        for nd in range(len(self._Nxyz)):
+            psi_dp[nd].fill(0.)
+            psi_p[nd].fill(0.)
             dp[nd].fill(0.)
-            b[nd].from_numpy(st.b[nd])
 
-        c2.fill(self._cp**2 * self._dt**2 / self._dx**2)
-        st.parameters_zero_boundaries(c2)
+        dt2Odx2 = self._dt**2 / self._dx**2
 
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p_0):
                 tmp1 = 0.
-                for nd in ti.static(range(st.Nd)):
-                    tmp2 = st.D(nd, dp[nd], xyz, 1)
-                    phi_dp[nd][xyz] = b[nd][xyz] * phi_dp[nd][xyz] + (b[nd][xyz] - 1) * tmp2
-                    tmp1 += phi_dp[nd][xyz] + tmp2
+                for nd in ti.static(range(len(self._Nxyz))):
+                    tmp2 = self._D(nd, dp[nd], xyz, 1)
+                    psi_dp[nd][xyz] = self._b[nd][xyz] * psi_dp[nd][xyz] + (self._b[nd][xyz] - 1) * tmp2
+                    tmp1 += psi_dp[nd][xyz] + tmp2
 
-                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + c2[xyz] * tmp1
+                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + dt2Odx2 * self._c2[xyz] * tmp1
 
-                for ns in ti.static(range(st.Ns)):
-                    if all(xyz == st.xyz_s[ns]):
-                        p_0[xyz] += source[nt]
-                for nr in ti.static(range(st.Nr)):
-                    if all(xyz == st.xyz_r[nr]):
-                        receiver[nt, nr] = p_0[xyz]
+                self._addSourceD2p(p_0, xyz, nt)
+                self._readSensors(p_0, xyz, nt)
 
                 # Circulate buffers
                 p_2[xyz] = p_1[xyz]
                 p_1[xyz] = p_0[xyz]
 
         @ti.kernel
-        def update_phi():
+        def update_psis():
             for xyz in ti.grouped(p_0):
-                for nd in ti.static(range(st.Nd)):
-                    dp[nd][xyz] = st.D(nd, p_0, xyz, 0)
-                    phi_p[nd][xyz] = b[nd][xyz] * phi_p[nd][xyz] + (b[nd][xyz] - 1) * dp[nd][xyz]
-                    dp[nd][xyz] += phi_p[nd][xyz]
+                for nd in ti.static(range(len(self._Nxyz))):
+                    dp[nd][xyz] = self._D(nd, p_0, xyz, 0)
+                    psi_p[nd][xyz] = self._b[nd][xyz] * psi_p[nd][xyz] + (self._b[nd][xyz] - 1) * dp[nd][xyz]
+                    dp[nd][xyz] += psi_p[nd][xyz]
 
         t_init = time()
         for nt in range(self._n_steps):
-            update_phi()
+            update_psis()
             update_p(nt)
-            st.show_anim(self, nt, p_0)
+            if self._show_anim:
+                self._show_anim_func(nt, p_0)
         sim_time = time() - t_init
 
         # "vx": vx, "vy": vy, "sens_vx": sens_vx, "sens_vy": sens_vy
         return {"sim_time": sim_time, "gpu_str": str(ti.lang.impl.current_cfg().arch),
-                "sens_pressure": receiver.to_numpy(), "pressure": p_0.to_numpy()}
+                "sens_pressure": self._receiver.to_numpy(), "pressure": p_0.to_numpy()}
+
+        
 
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando
@@ -114,6 +105,7 @@ sim_instance = SimulatorTaichiUnsplit(args.config)
 #%% Executa simulacao
 try:
     sim_instance.run()
+    # pass
 
 except KeyError as key:
     print(f"Chave {key} nao encontrada no arquivo de configuracao.")

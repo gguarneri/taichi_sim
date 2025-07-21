@@ -11,12 +11,11 @@ from sim_support.simulator import Simulator
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-import sim_taichi_common_new as stic
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
-class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
+class SimulatorTaichiStaggered(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
         super().__init__(file_config)
@@ -30,53 +29,70 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
         # --------------------------------------------
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
+        import sim_taichi_common_old as st
 
-        p = ti.field(self._tiFtype, shape=self._Nxyz)
-        v = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        psi_p = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        psi_v = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        st.init(self)
+        ti.init(arch=ti.gpu)
+
+        c2 = ti.field(st.tiFtype, shape=st.Nxyz)
+        # rho_ = ti.field(st.tiFtype, shape=st.Nxyz)
+        # K = ti.field(st.tiFtype, shape=st.Nxyz)
+        p = ti.field(st.tiFtype, shape=st.Nxyz)
+        v = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        b = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        psi_p = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        psi_v = [ti.field(st.tiFtype, shape=st.Nxyz) for _ in range(st.Nd)]
+        source = ti.field(st.tiFtype, shape=self._n_steps)
+        source.from_numpy((self._dt * np.cumsum(self._source_term * self._dt)).astype(st.npFtype))
+        # source.from_numpy((self._source_term * self._dt).astype(st.npFtype))
+
+        receiver = ti.field(st.tiFtype, shape=(self._n_steps, self._n_rec))
 
         p.fill(0.)
-        for nd in range(len(self._Nxyz)):
+        for nd in range(st.Nd):
             v[nd].fill(0.)
             psi_p[nd].fill(0.)
             psi_v[nd].fill(0.)
-        
+            b[nd].from_numpy(st.b[nd])
+        c2.fill(self._cp ** 2 * self._dt / self._dx)
+        # rho_.fill(self._dt / (self._rho * self._dx))
+        # K.fill(self._dt / (self._cp ** 2 * self._rho * self._dx))
         dtOdx = self._dt / self._dx
-        
+
+        st.parameters_zero_boundaries(c2)
+
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p):
-                for nd in ti.static(range(len(self._Nxyz))):
-                    tmp = self._D(nd, v[nd], xyz, 1)
-                    p[xyz] -= dtOdx * self._c2[xyz] * (tmp + psi_v[nd][xyz])
-                    psi_v[nd][xyz] = self._b[nd][xyz] * psi_v[nd][xyz] + (self._b[nd][xyz] - 1) * tmp
-                for ns in ti.static(range(self._n_src)):
-                    if all(xyz == self._xyz_s[ns]):
-                        p[xyz] += self._source_dp[ns][nt]
-                for nr in ti.static(range(self._n_src)):
-                    if all(xyz == self._xyz_r[nr]):
-                        self._receiver[nt, nr] = p[xyz]
+                for nd in ti.static(range(st.Nd)):
+                    tmp = st.D(nd, v[nd], xyz, 1)
+                    p[xyz] -= c2[xyz] * (tmp + psi_v[nd][xyz])
+                    psi_v[nd][xyz] = b[nd][xyz] * psi_v[nd][xyz] + (b[nd][xyz] - 1) * tmp
+                for ns in ti.static(range(st.Ns)):
+                    if all(xyz == st.xyz_s[ns]):
+                        p[xyz] += source[nt]
+                for nr in ti.static(range(st.Nr)):
+                    if all(xyz == st.xyz_r[nr]):
+                        receiver[nt, nr] = p[xyz]
 
         @ti.kernel
         def update_v():
             for xyz in ti.grouped(p):
-                for nd in ti.static(range(len(self._Nxyz))):
-                    tmp = self._D(nd, p, xyz, 0)
+                for nd in ti.static(range(st.Nd)):
+                    tmp = st.D(nd, p, xyz, 0)
                     v[nd][xyz] -= dtOdx * (tmp + psi_p[nd][xyz])
-                    psi_p[nd][xyz] = self._b[nd][xyz] * psi_p[nd][xyz] + (self._b[nd][xyz] - 1) * tmp
+                    psi_p[nd][xyz] = b[nd][xyz] * psi_p[nd][xyz] + (b[nd][xyz] - 1) * tmp
 
         t_init = time()
         for nt in range(self._n_steps):
             update_v()
             update_p(nt)
-            if self._show_anim:
-                self._show_anim_func(nt, p)
+            st.show_anim(self, nt, p)
         sim_time = time() - t_init
 
         # "vx": vx, "vy": vy, "sens_vx": sens_vx, "sens_vy": sens_vy
         return {"sim_time": sim_time, "gpu_str": str(ti.lang.impl.current_cfg().arch),
-                "sens_pressure": self._receiver.to_numpy(), "pressure": p.to_numpy()}
+                "sens_pressure": receiver.to_numpy(), "pressure": p.to_numpy()}
 
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando
