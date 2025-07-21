@@ -18,13 +18,13 @@ from findiff import coefficients as fdcoeffs
 # -----------------------------------------------------------------------------
 
 @ti.data_oriented
-class SimulatorTaichi(Simulator):
+class SimulatorTaichiCommon(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
         super().__init__(file_config)
 
         # Define o nome do simulador
-        self._name = "Taichi"
+        self._name = "Taichi Common"
 
         self._npFtype = np.float32
         self._tiFtype = ti.float32
@@ -38,8 +38,8 @@ class SimulatorTaichi(Simulator):
         try: self._xyz_r = (self._ix_rec,); self._xyz_r += (self._iy_rec,); self._xyz_r += (self._iz_rec,)
         except AttributeError: pass
 
-        self._xyz_s = tuple(tuple(i) for i in np.array(self._xyz_s).T.astype(self._npFtype))  # Coordinates of sources
-        self._xyz_r = tuple(tuple(i) for i in np.array(self._xyz_r).T.astype(self._npFtype))  # Coordinates of receivers
+        self._xyz_s = tuple(tuple(i) for i in np.array(self._xyz_s).T)  # Coordinates of sources
+        self._xyz_r = tuple(tuple(i) for i in np.array(self._xyz_r).T)  # Coordinates of receivers
 
         offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
         self._c = tuple(fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:].astype(self._npFtype))
@@ -47,13 +47,18 @@ class SimulatorTaichi(Simulator):
         ti.init(arch=ti.gpu)
 
         self._c2 = ti.field(self._tiFtype, shape=self._Nxyz)
+        #self._c2.fill(self._cp**2 * self._dt**2 / self._dx**2)
+        self._c2.fill(self._cp**2)
         self.zero_boundaries(self._c2)
 
         if self._source_term.ndim == 1:
             self._source_term = self._source_term[np.newaxis]
-        self._source = [ti.field(self._tiFtype, shape=self._n_steps) for _ in range(self._n_src)]
+        self._source_dp = [ti.field(self._tiFtype, shape=self._n_steps) for _ in range(self._n_src)]
+        self._source_d2p = [ti.field(self._tiFtype, shape=self._n_steps) for _ in range(self._n_src)]
         for ns in range(self._n_src):
-            self._source[ns].from_numpy((self._dt**2 * self._source_term[ns]).astype(self._npFtype))
+            dp = np.diff(self._source_term[ns], prepend=0)
+            self._source_dp[ns].from_numpy(dp.astype(self._npFtype))
+            self._source_d2p[ns].from_numpy(np.diff(dp, prepend=0).astype(self._npFtype))
         #self._receiver = [ti.field(self._tiFtype, shape=self._n_steps) for _ in range(self._n_rec)]
         self._receiver = ti.field(self._tiFtype, shape=(self._n_steps, self._n_rec))
 
@@ -70,7 +75,7 @@ class SimulatorTaichi(Simulator):
             self._b[nd].from_numpy(b[nd])
 
         # Definicao dos limites para a plotagem dos campos
-        self._v_max = 1.0
+        self._v_max = 10_000.
         self._v_min = - self._v_max
 
     @ti.func
@@ -110,44 +115,8 @@ class SimulatorTaichi(Simulator):
 
     def _show_anim_func(self, nt, u):
         if not nt % self._it_display:
-            u_np = u.to_numpy()[self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iy_min():self._roi.get_iy_max()]
+            # TODO: reavaliar xyz
+            u_np = u.to_numpy()[self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iz_min():self._roi.get_iz_max()]
             self._windows_gpu[0].imv.setImage(u_np, levels=[self._v_min, self._v_max])
             self._app.processEvents()
-
-#     def implementation(self):
-#         super().implementation()
-#
-#         # --------------------------------------------
-#         # Aqui comeca o codigo especifico do simulador
-#         # --------------------------------------------
-#
-#
-#
-#         # "vx": vx, "vy": vy, "sens_vx": sens_vx, "sens_vy": sens_vy
-#         # return {"sim_time": sim_time, "gpu_str": str(ti.lang.impl.current_cfg().arch),
-#         #         "sens_pressure": receiver.to_numpy(), "pressure": p_0.to_numpy()}
-#         return {"sim_time": 0., "gpu_str": str(ti.lang.impl.current_cfg().arch),
-#                 "sens_pressure": None, "pressure": None}
-#
-# # ----------------------------------------------------------
-# # Avaliacao dos parametros na linha de comando
-# # ----------------------------------------------------------
-# parser = argparse.ArgumentParser()
-# # parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
-# default_config_file = "ensaios/ponto/ponto.json"
-# parser.add_argument('-c', '--config', help='Configuration file', default=default_config_file)
-# args = parser.parse_args()
-#
-# # Cria a instancia do simulador
-# sim_instance = SimulatorTaichi(args.config)
-#
-# #%% Executa simulacao
-# try:
-#     sim_instance.run()
-#     # pass
-#
-# except KeyError as key:
-#     print(f"Chave {key} nao encontrada no arquivo de configuracao.")
-#
-# except ValueError as value:
-#     print(value)
+            # print("Showing animation...", u_np.shape, np.sum(u_np ** 2))
