@@ -26,7 +26,11 @@ class SimulatorTaichiCommon(Simulator):
         # Define o nome do simulador
         self._name = "Taichi Common"
 
+        ti.init(arch=ti.gpu)
+
+        self._npItype = np.int32
         self._npFtype = np.float32
+        self._tiItype = ti.int32
         self._tiFtype = ti.float32
 
         try: self._Nxyz = (self._nx,); self._Nxyz += (self._ny,); self._Nxyz += (self._nz,)
@@ -44,12 +48,10 @@ class SimulatorTaichiCommon(Simulator):
         offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
         self._c = tuple(fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:].astype(self._npFtype))
 
-        ti.init(arch=ti.gpu)
-
         self._c2 = ti.field(self._tiFtype, shape=self._Nxyz)
         #self._c2.fill(self._cp**2 * self._dt**2 / self._dx**2)
         self._c2.fill(self._cp**2)
-        self.zero_boundaries(self._c2)
+        self._zero_boundaries(self._c2)
 
         if self._source_term.ndim == 1:
             self._source_term = self._source_term[np.newaxis]
@@ -63,20 +65,52 @@ class SimulatorTaichiCommon(Simulator):
         self._receiver = ti.field(self._tiFtype, shape=(self._n_steps, self._n_rec))
 
         # ABC
-        bx = np.zeros((self._Nxyz[0], 1), dtype=self._npFtype)
-        by = np.zeros((1, self._Nxyz[1]), dtype=self._npFtype)
-        bx[1:-1, :] = self._b_x
-        by[:, 1:-1] = self._b_y
-        b = [None, None]
-        b[0] = (bx @ np.ones(self._Nxyz[1])[np.newaxis]).astype(self._npFtype)
-        b[1] = (np.ones(self._Nxyz[0])[:, np.newaxis] @ by).astype(self._npFtype)
-        self._b = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        for nd in range(len(self._Nxyz)):
-            self._b[nd].from_numpy(b[nd])
+        try:  # TODO: reavaliar xyz
+            self._Nabc = ((self._roi._pml_xmin_len, self._roi._pml_xmax_len),)
+            self._Nabc += ((self._roi._pml_zmin_len, self._roi._pml_zmax_len),)
+            self._Nabc += ((self._roi._pml_ymin_len, self._roi._pml_ymax_len),)
+        except AttributeError: pass
+
+        self._b_field = ti.field(self._tiFtype, shape=np.max(self._Nabc))
+        self._b_field.from_numpy(self._b_x[:self._Nabc[0][0], 0])
 
         # Definicao dos limites para a plotagem dos campos
         self._v_max = 10_000.
         self._v_min = - self._v_max
+
+    # @ti.func
+    # def _b_func(self, x, nxyz, nabc):
+    #     i, m = 0, 0
+    #     if x < nabc[0]:
+    #         i, m = x, 1
+    #     elif x >= nxyz - nabc[1]:
+    #         i, m = nxyz - x - 1, 1
+    #     return 1 + m * (self._b_field[i] - 1)
+
+    @ti.func
+    def _update_abc_(self, D, psi, xyz, nxyz, nabc, nd):
+        i, m = 0, 0
+        if xyz[nd] < nabc[0]:
+            i, m = xyz[nd], 1
+        elif xyz[nd] >= nxyz - nabc[1]:
+            i, m = nxyz - xyz[nd] - 1, 1
+        if m:
+            psi[xyz] = self._b_field[i] * psi[xyz] + (self._b_field[i] - 1) * D
+
+    @ti.func
+    def _update_abc(self, D, psi, xyz, nxyz, nabc, nd):
+        r = D
+        if xyz[nd] < nabc[0]:
+            r += psi[xyz]
+            psi[xyz] = self._b_field[xyz[nd]] * psi[xyz] + (self._b_field[xyz[nd]] - 1) * D
+        elif xyz[nd] >= nxyz - nabc[1]:
+            r += psi[xyz]
+            psi[xyz] = self._b_field[nxyz - xyz[nd] - 1] * psi[xyz] + (self._b_field[nxyz - xyz[nd] - 1] - 1) * D
+        return r
+
+    @ti.func
+    def _a_func(self, nd, xyz):
+        return self._b[nd][xyz] - 1
 
     @ti.func
     def _D(self, nd, u, xyz, bf):
@@ -105,7 +139,7 @@ class SimulatorTaichiCommon(Simulator):
         return d
 
     @ti.kernel
-    def zero_boundaries(self, prmtr: ti.template()):
+    def _zero_boundaries(self, prmtr: ti.template()):
         for xyz in ti.grouped(prmtr):
             cond = False
             for nd in ti.static(range(len(self._Nxyz))):
@@ -119,7 +153,6 @@ class SimulatorTaichiCommon(Simulator):
             u_np = u.to_numpy()[self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iz_min():self._roi.get_iz_max()]
             self._windows_gpu[0].imv.setImage(u_np, levels=[self._v_min, self._v_max])
             self._app.processEvents()
-            # print("Showing animation...", u_np.shape, np.sum(u_np ** 2))
 
     @ti.func
     def _addSourceD2p(self, p, xyz, nt):
@@ -138,3 +171,18 @@ class SimulatorTaichiCommon(Simulator):
         for nr in ti.static(range(self._n_rec)):
             if all(xyz == self._xyz_r[nr]):
                 self._receiver[nt, nr] = p[xyz]
+
+if __name__ == '__main__':
+    import argparse
+    import matplotlib.pyplot as plt
+    # import matplotlib as mpl
+    # mpl.use('Qt5Agg')
+    # plt.ion()
+
+    parser = argparse.ArgumentParser()
+    default_config_file = "ensaios/ponto/ponto.json"
+    parser.add_argument('-c', '--config', help='Configuration file', default=default_config_file)
+    args = parser.parse_args()
+    sim = SimulatorTaichiCommon(args.config)
+
+    plt.imshow(sim._b[0].to_numpy())

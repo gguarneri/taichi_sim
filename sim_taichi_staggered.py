@@ -4,8 +4,8 @@
 import argparse
 from time import time
 import numpy as np
-from sim_support import *
-from sim_support.simulator import Simulator
+# from sim_support import *
+# from sim_support.simulator import Simulator
 
 # ======================
 # Importacao de pacotes especificos para a implementacao do simulador
@@ -41,16 +41,17 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
             v[nd].fill(0.)
             psi_p[nd].fill(0.)
             psi_v[nd].fill(0.)
-        
+
         dtOdx = self._dt / self._dx
         
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(len(self._Nxyz))):
-                    tmp = self._D(nd, v[nd], xyz, 1)
-                    p[xyz] -= dtOdx * self._c2[xyz] * (tmp + psi_v[nd][xyz])
-                    psi_v[nd][xyz] = self._b[nd][xyz] * psi_v[nd][xyz] + (self._b[nd][xyz] - 1) * tmp
+                    D = self._D(nd, v[nd], xyz, 1)
+                    # p[xyz] += dtOdx * self._update_abc(D, psi_v[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
+                    p[xyz] -= dtOdx * self._c2[xyz] * (D + psi_v[nd][xyz])
+                    self._update_abc_(D, psi_v[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
 
                 self._addSourceDp(p, xyz, nt)
                 self._readSensors(p, xyz, nt)
@@ -59,9 +60,9 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
         def update_v():
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(len(self._Nxyz))):
-                    tmp = self._D(nd, p, xyz, 0)
-                    v[nd][xyz] -= dtOdx * (tmp + psi_p[nd][xyz])
-                    psi_p[nd][xyz] = self._b[nd][xyz] * psi_p[nd][xyz] + (self._b[nd][xyz] - 1) * tmp
+                    D = self._D(nd, p, xyz, 0)
+                    v[nd][xyz] -= dtOdx * (D + psi_p[nd][xyz])
+                    self._update_abc_(D, psi_p[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
 
         t_init = time()
         for nt in range(self._n_steps):

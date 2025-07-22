@@ -1,6 +1,6 @@
 {  "matplotlib" :
   {
-    "use": "Qt5Agg"
+    "use": ""
   },
   "roi" :
     {
@@ -63,7 +63,7 @@
   "simul_configs":
   {
     "n_iter": 1,
-    "show_anim": 1,
+    "show_anim": 0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
