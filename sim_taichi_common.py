@@ -88,24 +88,29 @@ class SimulatorTaichiCommon(Simulator):
     #     return 1 + m * (self._b_field[i] - 1)
 
     @ti.func
-    def _update_abc_(self, D, psi, xyz, nxyz, nabc, nd):
+    def _update_abc_(self, D, psi_min, psi_max, xyz, nxyz, nabc, nd):
         i, m = 0, 0
         if xyz[nd] < nabc[0]:
             i, m = xyz[nd], 1
+            psi_min[i] = self._b_field[i] * psi_min[i] + (self._b_field[i] - 1) * D
         elif xyz[nd] >= nxyz - nabc[1]:
             i, m = nxyz - xyz[nd] - 1, 1
-        if m:
-            psi[xyz] = self._b_field[i] * psi[xyz] + (self._b_field[i] - 1) * D
+            psi_max[i] = self._b_field[i] * psi_max[i] + (self._b_field[i] - 1) * D
+        # if m:
+            # psi[i] = self._b_field[i] * psi[i] + (self._b_field[i] - 1) * D
 
     @ti.func
-    def _update_abc(self, D, psi, xyz, nxyz, nabc, nd):
+    def _update_abc(self, D, psi_min, psi_max, xyz, nxyz, nabc, nd):
         r = D
         if xyz[nd] < nabc[0]:
-            r += psi[xyz]
-            psi[xyz] = self._b_field[xyz[nd]] * psi[xyz] + (self._b_field[xyz[nd]] - 1) * D
+            r += psi_min[xyz]
+            psi_min[xyz] = self._b_field[xyz[nd]] * psi_min[xyz] + (self._b_field[xyz[nd]] - 1) * D
         elif xyz[nd] >= nxyz - nabc[1]:
-            r += psi[xyz]
-            psi[xyz] = self._b_field[nxyz - xyz[nd] - 1] * psi[xyz] + (self._b_field[nxyz - xyz[nd] - 1] - 1) * D
+            i = nxyz - xyz[nd] - 1
+            xyz_r = xyz[:]
+            xyz_r[nd] += nabc[1] - nxyz
+            r += psi_max[xyz_r]
+            psi_max[xyz_r] = self._b_field[i] * psi_max[xyz_r] + (self._b_field[i] - 1) * D
         return r
 
     @ti.func

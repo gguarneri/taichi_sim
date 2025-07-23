@@ -33,14 +33,25 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
 
         p = ti.field(self._tiFtype, shape=self._Nxyz)
         v = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        psi_p = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        psi_v = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        # psi_p = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        # psi_v = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        psi_p = []
+        psi_v = []
+        for nd in range(len(self._Nxyz)):
+            Nxyz_min = list(self._Nxyz)
+            Nxyz_max = list(self._Nxyz)
+            Nxyz_min[nd] = self._Nabc[nd][0]
+            Nxyz_max[nd] = self._Nabc[nd][1]
+            psi_p.append([ti.field(self._tiFtype, shape=Nxyz_min), ti.field(self._tiFtype, shape=Nxyz_max)])
+            psi_v.append([ti.field(self._tiFtype, shape=Nxyz_min), ti.field(self._tiFtype, shape=Nxyz_max)])
 
         p.fill(0.)
         for nd in range(len(self._Nxyz)):
             v[nd].fill(0.)
-            psi_p[nd].fill(0.)
-            psi_v[nd].fill(0.)
+            psi_p[nd][0].fill(0.)
+            psi_p[nd][1].fill(0.)
+            psi_v[nd][0].fill(0.)
+            psi_v[nd][1].fill(0.)
 
         dtOdx = self._dt / self._dx
         
@@ -49,9 +60,10 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(len(self._Nxyz))):
                     D = self._D(nd, v[nd], xyz, 1)
-                    # p[xyz] += dtOdx * self._update_abc(D, psi_v[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
-                    p[xyz] -= dtOdx * self._c2[xyz] * (D + psi_v[nd][xyz])
-                    self._update_abc_(D, psi_v[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
+                    tmp =  self._update_abc(D, psi_v[nd][0], psi_v[nd][1], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
+                    p[xyz] -= dtOdx * self._c2[xyz]  * tmp
+                    # p[xyz] -= dtOdx * self._c2[xyz] * (D + psi_v[nd][xyz])
+                    # self._update_abc_(D, psi_v[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
 
                 self._addSourceDp(p, xyz, nt)
                 self._readSensors(p, xyz, nt)
@@ -61,8 +73,10 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(len(self._Nxyz))):
                     D = self._D(nd, p, xyz, 0)
-                    v[nd][xyz] -= dtOdx * (D + psi_p[nd][xyz])
-                    self._update_abc_(D, psi_p[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
+                    tmp = self._update_abc(D, psi_p[nd][0], psi_p[nd][1], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
+                    v[nd][xyz] -= dtOdx * tmp
+                    # v[nd][xyz] -= dtOdx * (D + psi_p[nd][xyz])
+                    # self._update_abc_(D, psi_p[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
 
         t_init = time()
         for nt in range(self._n_steps):
@@ -92,6 +106,7 @@ sim_instance = SimulatorTaichiStaggered(args.config)
 #%% Executa simulacao
 try:
     sim_instance.run()
+    # pass
 
 except KeyError as key:
     print(f"Chave {key} nao encontrada no arquivo de configuracao.")

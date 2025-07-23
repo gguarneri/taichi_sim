@@ -58,12 +58,12 @@
     "time_steps": 2000,
     "dt": 2.6e-4,
     "acc": 2,
-    "it_display": 10
+    "it_display": 5
   },
   "simul_configs":
   {
     "n_iter": 1,
-    "show_anim": 0,
+    "show_anim": 1,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
