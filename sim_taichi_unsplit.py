@@ -4,21 +4,21 @@
 import argparse
 from time import time
 import numpy as np
-from sim_support import *
-from sim_support.simulator import Simulator
+# from sim_support import *
+# from sim_support.simulator import Simulator
 
 # ======================
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-import sim_taichi_common as stic
+from sim_taichi_common import SimulatorTaichiCommon
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
 
 @ti.data_oriented
-class SimulatorTaichiUnsplit(stic.SimulatorTaichiCommon):
+class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
         super().__init__(file_config)
@@ -33,17 +33,32 @@ class SimulatorTaichiUnsplit(stic.SimulatorTaichiCommon):
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
 
-        p_0 = ti.field(self._tiFtype, shape=self._Nxyz)
-        p_1 = ti.field(self._tiFtype, shape=self._Nxyz)
-        p_2 = ti.field(self._tiFtype, shape=self._Nxyz)
-        psi_dp = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        psi_p = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        dp = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        # Pressure and velocity fields
+        p_0 = ti.field(float, shape=self._Nxyz.to_numpy())
+        p_1 = ti.field(float, shape=self._Nxyz.to_numpy())
+        p_2 = ti.field(float, shape=self._Nxyz.to_numpy())
+
+        # Absorbing Boundary Conditions (ABC)
+        # Convolutional Perfect Matched Layer (C-PML)
+        # Auxiliary variables
+        dp = []
+        psi_p = []
+        psi_dp = []
+        for nd in range(self._Nd):
+            Npml = self._Nxyz.to_numpy()
+            Npml[nd] = self._Nabc[nd, 0] + self._Nabc[nd, 1]
+            psi_p.append(ti.field(float, Npml))
+            psi_dp.append(ti.field(float, Npml))
+
+        dp = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
+        # psi_dp = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
+        # psi_p = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
+
 
         p_0.fill(0.)
         p_1.fill(0.)
         p_2.fill(0.)
-        for nd in range(len(self._Nxyz)):
+        for nd in range(self._Nd):
             psi_dp[nd].fill(0.)
             psi_p[nd].fill(0.)
             dp[nd].fill(0.)
@@ -53,13 +68,13 @@ class SimulatorTaichiUnsplit(stic.SimulatorTaichiCommon):
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p_0):
-                tmp1 = 0.
-                for nd in ti.static(range(len(self._Nxyz))):
-                    tmp2 = self._D(nd, dp[nd], xyz, 1)
-                    psi_dp[nd][xyz] = self._b[nd][xyz] * psi_dp[nd][xyz] + (self._b[nd][xyz] - 1) * tmp2
-                    tmp1 += psi_dp[nd][xyz] + tmp2
+                tmp = 0.
+                for nd in ti.static(range(self._Nd)):
+                    D = self._D(dp[nd], xyz, nd, 1)
+                    #psi_dp[nd][xyz] = self._b[nd][xyz] * psi_dp[nd][xyz] + (self._b[nd][xyz] - 1) * tmp2
+                    tmp += psi_dp[nd][xyz] + self._pml(D, psi_dp[nd], xyz, nd)
 
-                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + dt2Odx2 * self._c2[xyz] * tmp1
+                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + dt2Odx2 * self._c2[xyz] * tmp
 
                 self._addSourceD2p(p_0, xyz, nt)
                 self._readSensors(p_0, xyz, nt)
@@ -71,9 +86,11 @@ class SimulatorTaichiUnsplit(stic.SimulatorTaichiCommon):
         @ti.kernel
         def update_psis():
             for xyz in ti.grouped(p_0):
-                for nd in ti.static(range(len(self._Nxyz))):
-                    dp[nd][xyz] = self._D(nd, p_0, xyz, 0)
-                    psi_p[nd][xyz] = self._b[nd][xyz] * psi_p[nd][xyz] + (self._b[nd][xyz] - 1) * dp[nd][xyz]
+                for nd in ti.static(range(self._Nd)):
+                    # dp[nd][xyz] = self._D(p_0, xyz, nd, 0)
+                    D = self._D(p_0, xyz, nd, 0)
+                    #psi_p[nd][xyz] = self._b[nd][xyz] * psi_p[nd][xyz] + (self._b[nd][xyz] - 1) * dp[nd][xyz]
+
                     dp[nd][xyz] += psi_p[nd][xyz]
 
         t_init = time()

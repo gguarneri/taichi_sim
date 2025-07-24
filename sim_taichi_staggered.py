@@ -11,12 +11,12 @@ import numpy as np
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-import sim_taichi_common as stic
+from sim_taichi_common import SimulatorTaichiCommon
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
-class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
+class SimulatorTaichiStaggered(SimulatorTaichiCommon):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
         super().__init__(file_config)
@@ -31,39 +31,36 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
 
-        p = ti.field(self._tiFtype, shape=self._Nxyz)
-        v = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        # psi_p = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
-        # psi_v = [ti.field(self._tiFtype, shape=self._Nxyz) for _ in range(len(self._Nxyz))]
+        # Pressure and velocity fields
+        p = ti.field(float, self._Nxyz.to_numpy())
+        v = [ti.field(float, self._Nxyz.to_numpy()) for _ in range(self._Nd)]
+
+        # Absorbing Boundary Conditions (ABC)
+        # Convolutional Perfect Matched Layer (C-PML)
+        # Auxiliary variables
         psi_p = []
         psi_v = []
-        for nd in range(len(self._Nxyz)):
-            Nxyz_min = list(self._Nxyz)
-            Nxyz_max = list(self._Nxyz)
-            Nxyz_min[nd] = self._Nabc[nd][0]
-            Nxyz_max[nd] = self._Nabc[nd][1]
-            psi_p.append([ti.field(self._tiFtype, shape=Nxyz_min), ti.field(self._tiFtype, shape=Nxyz_max)])
-            psi_v.append([ti.field(self._tiFtype, shape=Nxyz_min), ti.field(self._tiFtype, shape=Nxyz_max)])
+        for nd in range(self._Nd):
+            Npml = self._Nxyz.to_numpy()
+            Npml[nd] = self._Nabc[nd, 0] + self._Nabc[nd, 1]
+            psi_p.append(ti.field(float, Npml))
+            psi_v.append(ti.field(float, Npml))
 
+        # Filling fields with zeros
         p.fill(0.)
-        for nd in range(len(self._Nxyz)):
+        for nd in range(self._Nd):
             v[nd].fill(0.)
-            psi_p[nd][0].fill(0.)
-            psi_p[nd][1].fill(0.)
-            psi_v[nd][0].fill(0.)
-            psi_v[nd][1].fill(0.)
+            psi_p[nd].fill(0.)
+            psi_v[nd].fill(0.)
 
         dtOdx = self._dt / self._dx
         
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p):
-                for nd in ti.static(range(len(self._Nxyz))):
-                    D = self._D(nd, v[nd], xyz, 1)
-                    tmp =  self._update_abc(D, psi_v[nd][0], psi_v[nd][1], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
-                    p[xyz] -= dtOdx * self._c2[xyz]  * tmp
-                    # p[xyz] -= dtOdx * self._c2[xyz] * (D + psi_v[nd][xyz])
-                    # self._update_abc_(D, psi_v[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
+                for nd in ti.static(range(self._Nd)):
+                    D = self._D(v[nd], xyz, nd, 1)
+                    p[xyz] -= dtOdx * self._c2[xyz]  * self._pml(D, psi_v[nd], xyz, nd)
 
                 self._addSourceDp(p, xyz, nt)
                 self._readSensors(p, xyz, nt)
@@ -71,12 +68,9 @@ class SimulatorTaichiStaggered(stic.SimulatorTaichiCommon):
         @ti.kernel
         def update_v():
             for xyz in ti.grouped(p):
-                for nd in ti.static(range(len(self._Nxyz))):
-                    D = self._D(nd, p, xyz, 0)
-                    tmp = self._update_abc(D, psi_p[nd][0], psi_p[nd][1], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
-                    v[nd][xyz] -= dtOdx * tmp
-                    # v[nd][xyz] -= dtOdx * (D + psi_p[nd][xyz])
-                    # self._update_abc_(D, psi_p[nd], xyz, self._Nxyz[nd], self._Nabc[nd], nd)
+                for nd in ti.static(range(self._Nd)):
+                    D = self._D(p, xyz, nd,0)
+                    v[nd][xyz] -= dtOdx * self._pml(D, psi_p[nd], xyz, nd)
 
         t_init = time()
         for nt in range(self._n_steps):
