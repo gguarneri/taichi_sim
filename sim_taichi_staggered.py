@@ -59,7 +59,7 @@ class SimulatorTaichiStaggered(SimulatorTaichiCommon):
         def update_p(nt: int):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(self._Nd)):
-                    D = self._D(v[nd], xyz, nd, 1)
+                    D = self._D(v[nd], xyz, nd, 1, v[nd].shape[nd])
                     p[xyz] -= dtOdx * self._c2[xyz]  * self._pml(D, psi_v[nd], xyz, nd)
 
                 self._addSourceDp(p, xyz, nt)
@@ -69,7 +69,7 @@ class SimulatorTaichiStaggered(SimulatorTaichiCommon):
         def update_v():
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(self._Nd)):
-                    D = self._D(p, xyz, nd,0)
+                    D = self._D(p, xyz, nd,0, p.shape[nd])
                     v[nd][xyz] -= dtOdx * self._pml(D, psi_p[nd], xyz, nd)
 
         t_init = time()

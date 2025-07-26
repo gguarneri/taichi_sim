@@ -24,7 +24,7 @@ class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
         super().__init__(file_config)
 
         # Define o nome do simulador
-        self._name = "Taichi Unsplit"
+        self._name = "Taichi Unsplit Yao 2018"
         
     def implementation(self):
         super().implementation()
@@ -39,58 +39,48 @@ class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
         p_2 = ti.field(float, shape=self._Nxyz.to_numpy())
 
         # Absorbing Boundary Conditions (ABC)
-        # Convolutional Perfect Matched Layer (C-PML)
-        # Auxiliary variables
-        dp = []
-        psi_p = []
-        psi_dp = []
-        for nd in range(self._Nd):
-            Npml = self._Nxyz.to_numpy()
-            Npml[nd] = self._Nabc[nd, 0] + self._Nabc[nd, 1]
-            psi_p.append(ti.field(float, Npml))
-            psi_dp.append(ti.field(float, Npml))
+        # Effective Absorbing Layer (EAL)
+        # Yao et al. 2018
+        # 10.1088/1742-2140/aaa4da
 
-        dp = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
-        # psi_dp = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
-        # psi_p = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
+        D = ti.field(float, shape=self._Nxyz.to_numpy())
+        tmp = np.zeros(self._Nxyz.to_numpy())
+        tmp[1:-1, :] += self._a_x @ np.ones((1, self._Nxyz.to_numpy()[1]))
+        tmp[:, 1:-1] += np.ones((self._Nxyz.to_numpy()[0], 1)) @ self._a_y
+
+        D.from_numpy(tmp.astype(self._npFtp))
 
         p_0.fill(0.)
         p_1.fill(0.)
         p_2.fill(0.)
-        for nd in range(self._Nd):
-            psi_dp[nd].fill(0.)
-            psi_p[nd].fill(0.)
-            dp[nd].fill(0.)
 
         dt2Odx2 = self._dt**2 / self._dx**2
 
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p_0):
-                tmp = 0.
-                for nd in ti.static(range(self._Nd)):
-                    D = self._D(dp[nd], xyz, nd, 1, dp[nd].shape[nd])
-                    tmp += self._pml(D, psi_dp[nd], xyz, nd)
+                d = D[xyz]
+                oneMd = 1 - d
+                a = (2 - d**2) / oneMd
+                b = - (1 + d) / oneMd
+                c =  dt2Odx2 / oneMd
 
-                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + dt2Odx2 * self._c2[xyz] * tmp
+                p_0[xyz] = a * p_1[xyz] + b * p_2[xyz] + c * self._c2[xyz] * self._lap(p_1, xyz)
 
                 self._addSourceD2p(p_0, xyz, nt)
                 self._readSensors(p_0, xyz, nt)
 
+        @ti.kernel
+        def circulate_buffers():
+            for xyz in ti.grouped(p_0):
                 # Circulate buffers
                 p_2[xyz] = p_1[xyz]
                 p_1[xyz] = p_0[xyz]
 
-        @ti.kernel
-        def update_psis():
-            for xyz in ti.grouped(p_0):
-                for nd in ti.static(range(self._Nd)):
-                    dp[nd][xyz] = self._pml(self._D(p_0, xyz, nd, 0, p_0.shape[nd]), psi_p[nd], xyz, nd)
-
         t_init = time()
         for nt in range(self._n_steps):
-            update_psis()
             update_p(nt)
+            circulate_buffers()
             if self._show_anim:
                 self._show_anim_func(nt, p_0)
         sim_time = time() - t_init

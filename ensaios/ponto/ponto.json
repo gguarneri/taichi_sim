@@ -1,7 +1,7 @@
 {  "matplotlib" :
   {
-    "_use": "Qt5Agg",
-    "use": ""
+    "use": "Qt5Agg",
+    "_use": ""
   },
   "roi" :
     {
@@ -56,10 +56,10 @@
   ],
   "simul_params":
   {
-    "time_steps": 2000,
+    "time_steps": 2500,
     "dt": 2.6e-4,
     "acc": 2,
-    "it_display": 10
+    "it_display": 5
   },
   "simul_configs":
   {

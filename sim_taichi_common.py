@@ -51,7 +51,9 @@ class SimulatorTaichiCommon(Simulator):
         self._xyz_r = tuple(tuple(i) for i in np.array(self._xyz_r).T)  # Coordinates of receivers
 
         offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
-        self._c = tuple(fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:].astype(self._npFtp))
+        self._cd1 = tuple(fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:].astype(self._npFtp))
+        self.offsets = tuple(np.arange(1 - self._deriv_acc, self._deriv_acc))
+        self._cd2 = tuple(fdcoeffs(deriv=2, offsets=self.offsets)["coefficients"][round(self._deriv_acc/2):].astype(self._npFtp))
 
         self._c2 = ti.field(float, self._Nxyz.to_numpy())
         self._c2.fill(self._cp**2)
@@ -80,6 +82,8 @@ class SimulatorTaichiCommon(Simulator):
         self._b = ti.field(float, np.max(Nabc))
         self._b.from_numpy(self._b_x[:Nabc[0][0], 0])
 
+
+
         # Definicao dos limites para a plotagem dos campos
         self._v_max = 10_000.
         self._v_min = - self._v_max
@@ -100,31 +104,53 @@ class SimulatorTaichiCommon(Simulator):
         return r
 
     @ti.func
-    def _D(self, u, xyz, nd: int, bf: int):  # def _D(self, nd, u, xyz, bf):
+    def _D(self, u: ti.template(), xyz, nd: int, bf: int, imax: int):  # def _D(self, nd, u, xyz, bf):
         """field, position, dimension, backward or forward"""
         d = 0.
-        for nc in ti.static(range(len(self._c))):
+        # iimax = u.shape[nd[0]]
+        for nc in ti.static(range(self._deriv_acc)):
             # # Solution 1
             # xyz_p = xyz[:]
-            # xyz_m = xyz[:]
+            # xyz_n = xyz[:]
             # xyz_p[nd] += nc + bf
-            # xyz_m[nd] -= nc - bf + 1
-            # d += ti.static(fdstg[nc]) * (u[xyz_p] - u[xyz_m])
+            # xyz_n[nd] -= nc - bf + 1
+            # a = u[xyz_p] if xyz_p[nd] < imax else 0
+            # b = u[xyz_n] if xyz_n[nd] >= 0 else 0
+            # d += ti.static(self._cd1[nc]) * (a - b)
 
             # # Solution 2
-            # xyz[nd] += nc + bf
-            # a = u[xyz]
-            # xyz[nd] += - 2 * nc - 1
-            # d += ti.static(fdstg[nc]) * (a - u[xyz])
-            # xyz[nd] += nc + 1 - bf
+            # xyz_tmp = xyz[:]
+            # xyz_tmp[nd] += nc + bf
+            # a = u[xyz_tmp] if xyz_tmp[nd] < imax else 0
+            # xyz_tmp[nd] += - 2 * nc - 1
+            # b = u[xyz_tmp] if xyz_tmp[nd] >= 0 else 0
+            # d += ti.static(self._cd1[nc]) * (a - b)
+
+            # c = u.shape[0]
+            # ti.static_print(nd)
+            # c = c[ti.static(nd)]
 
             # Solution 3
-            xyz_tmp = xyz[:]
-            xyz_tmp[nd] += nc + bf
-            a = u[xyz_tmp]
-            xyz_tmp[nd] += - 2 * nc - 1
-            d += ti.static(self._c[nc]) * (a - u[xyz_tmp])
+            xyz[nd] += nc + bf
+            a = u[xyz] if xyz[nd] < imax else 0
+            xyz[nd] += - 2 * nc - 1
+            b = u[xyz] if xyz[nd] >= 0 else 0
+            xyz[nd] += nc + 1 - bf
+            d += ti.static(self._cd1[nc]) * (a - b)
+
         return d
+
+    @ti.func
+    def _lap(self, u, xyz):
+        l = ti.static(self._Nd * self._cd2[0]) * u[xyz]
+        for nd in ti.static(range(self._Nd)):
+            for nc in ti.static(range(1, len(self._cd2))):
+                xyz_tmp = xyz[:]
+                xyz_tmp[nd] += nc
+                a = u[xyz_tmp]
+                xyz_tmp[nd] += - 2 * nc
+                l += ti.static(self._cd2[nc]) * (a + u[xyz_tmp])
+        return l
 
     @ti.kernel
     def _zero_boundaries(self, prmtr: ti.template()):
