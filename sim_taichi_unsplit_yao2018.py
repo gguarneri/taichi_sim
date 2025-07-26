@@ -12,6 +12,7 @@ import numpy as np
 # ======================
 import taichi as ti
 from sim_taichi_common import SimulatorTaichiCommon
+import math
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
@@ -24,7 +25,7 @@ class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
         super().__init__(file_config)
 
         # Define o nome do simulador
-        self._name = "Taichi Unsplit"
+        self._name = "Taichi Unsplit Yao 2018"
         
     def implementation(self):
         super().implementation()
@@ -39,58 +40,63 @@ class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
         p_2 = ti.field(float, shape=self._Nxyz.to_numpy())
 
         # Absorbing Boundary Conditions (ABC)
-        # Convolutional Perfect Matched Layer (C-PML)
-        # Auxiliary variables
-        dp = []
-        psi_p = []
-        psi_dp = []
-        for nd in range(self._Nd):
-            Npml = self._Nxyz.to_numpy()
-            Npml[nd] = self._Nabc[nd, 0] + self._Nabc[nd, 1]
-            psi_p.append(ti.field(float, Npml))
-            psi_dp.append(ti.field(float, Npml))
+        # Effective Absorbing Layer (EAL)
+        # Yao et al. 2018
+        # 10.1088/1742-2140/aaa4da
+        R = .05
+        d0_mod = math.log(R) * (3/2) * self._cp
+        a_1 = ti.field(float, shape=self._Nxyz.to_numpy())
+        a_2 = ti.field(float, shape=self._Nxyz.to_numpy())
+        a_3 = ti.field(float, shape=self._Nxyz.to_numpy())
 
-        dp = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
-        # psi_dp = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
-        # psi_p = [ti.field(float, shape=self._Nxyz.to_numpy()) for _ in range(self._Nd)]
+        @ti.kernel
+        def fill_abc():
+            for xyz in ti.grouped(a_1):
+                r = 0.
+                for nd in ti.static(range(self._Nd)):
+                    if xyz[nd] < self._Nabc[nd, 0]:
+                        # r = ti.sqrt(r**2 + ((self._Nabc[nd, 0] - xyz[nd])/self._Nabc[nd, 0])**2)
+                        r = ti.sqrt(r**2 + ((self._Nabc[nd, 0] - xyz[nd])/self._Nabc[nd, 0]**(3/2))**2)
+                    elif xyz[nd] >= self._Nxyz[nd] - self._Nabc[nd, 1]:
+                        # r = ti.sqrt(r**2 + ((xyz[nd] - self._Nxyz[nd] + self._Nabc[nd, 1] + 1)/self._Nabc[nd, 1])**2)
+                        r = ti.sqrt(r**2 + ((xyz[nd] - self._Nxyz[nd] + self._Nabc[nd, 1] + 1)/self._Nabc[nd, 1]**(3/2))**2)
+
+                d = d0_mod * r**2
+                a_1[xyz] = (2 - d**2 * self._dt**2) / (1 - d * self._dt)
+                a_2[xyz] = -(1 + d * self._dt) / (1 - d * self._dt)
+                a_3[xyz] = self._c2[xyz] * self._dt**2 / ((1 - d * self._dt) * self._dx**2)
+
+        fill_abc()
 
         p_0.fill(0.)
         p_1.fill(0.)
         p_2.fill(0.)
-        for nd in range(self._Nd):
-            psi_dp[nd].fill(0.)
-            psi_p[nd].fill(0.)
-            dp[nd].fill(0.)
-
-        dt2Odx2 = self._dt**2 / self._dx**2
 
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p_0):
-                tmp = 0.
-                for nd in ti.static(range(self._Nd)):
-                    D = self._D(dp[nd], xyz, nd, 1, dp[nd].shape[nd])
-                    tmp += self._pml(D, psi_dp[nd], xyz, nd)
+                # d = self._d[xyz]
+                # oneMd = 1 - d
+                # a = (2 - d**2) / oneMd
+                # b = - (1 + d) / oneMd
+                # c =  dt2Odx2 / oneMd
+                # p_0[xyz] = a * p_1[xyz] + b * p_2[xyz] + c * self._c2[xyz] * self._lap(p_1, xyz)
 
-                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + dt2Odx2 * self._c2[xyz] * tmp
-
+                p_0[xyz] = a_1[xyz] * p_1[xyz] + a_2[xyz] * p_2[xyz] + a_3[xyz] * self._lap(p_1, xyz)
                 self._addSourceD2p(p_0, xyz, nt)
                 self._readSensors(p_0, xyz, nt)
 
+        @ti.kernel
+        def circulate_buffers():
+            for xyz in ti.grouped(p_0):
                 # Circulate buffers
                 p_2[xyz] = p_1[xyz]
                 p_1[xyz] = p_0[xyz]
 
-        @ti.kernel
-        def update_psis():
-            for xyz in ti.grouped(p_0):
-                for nd in ti.static(range(self._Nd)):
-                    dp[nd][xyz] = self._pml(self._D(p_0, xyz, nd, 0, p_0.shape[nd]), psi_p[nd], xyz, nd)
-
         t_init = time()
         for nt in range(self._n_steps):
-            update_psis()
             update_p(nt)
+            circulate_buffers()
             if self._show_anim:
                 self._show_anim_func(nt, p_0)
         sim_time = time() - t_init

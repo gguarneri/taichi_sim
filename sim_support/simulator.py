@@ -25,15 +25,6 @@ class Simulator:
         with open(file_config, 'r') as f:
             self._configs = ast.literal_eval(f.read())
 
-        try:
-            self._mpl_use = self._configs["matplotlib"]["use"]
-        except KeyError:
-            self._mpl_use = ""
-
-        if self._mpl_use:
-            import matplotlib as mpl
-            mpl.use(self._mpl_use)
-
         # Configuracao da simulacao
         self._deriv_acc = self._configs["simul_params"]["acc"] if "acc" in self._configs["simul_params"] else 2
         try:
