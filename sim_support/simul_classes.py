@@ -738,7 +738,7 @@ class SimulationProbeLinearArray(SimulationProbe):
             return np.array([e.freq for e in self.elem_list]).max()
         else:
             return self._freq
-
+    
     def get_points_roi(self, sim_roi=SimulationROI(), simul_type="2D", dir="e"):
         """
         Função que retorna as coordenadas de todos os pontos ativos do transdutor no grid de simulação,
@@ -940,6 +940,22 @@ class SimulationProbePoint(SimulationProbe):
         """
         return self._freq
 
+    def get_coords(self):
+        """
+        Função que retorna as coordenadas reais do centro elementos ativos do transdutor,
+        no formato vetorizado.
+
+        Returns
+        -------
+            : array
+                Array com o ponto central ativo do transdutor.
+                Cada elemento desse array é a coordenada cartesiana do centro do elemento ativo do transdutor.
+
+        """
+
+        return self.coord_center
+        
+    
     def get_points_roi(self, sim_roi=SimulationROI(), simul_type="2D", dir="e"):
         """
         Função que retorna a coordenada do ponto ativo do transdutor no grid de simulação,
