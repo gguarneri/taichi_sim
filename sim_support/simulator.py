@@ -350,8 +350,8 @@ class Simulator:
                     for r in range(results_dict["sens_pressure"].shape[1]):
                         sensor_pressure_result = plt.figure()
                         plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
-                        plt.plot(results_dict["sens_pressure"][:, r])
-                        plt.plot(0.537706511*np.roll(bscan_ref, -365))
+                        plt.plot(results_dict["sens_pressure"][:, r], label='simulated')
+                        plt.plot(bscan_ref, label='reference')
                         
                         # Salva a imagem do sensor
                         if self._save_sensors:

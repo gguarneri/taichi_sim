@@ -1002,7 +1002,7 @@ class SimulationProbePoint(SimulationProbe):
 
         gauswavf = np.diff(self._gain * np.float32(ss) / dt, append=0.0).astype(flt32)
         ricker = np.diff(gauswavf / dt, append=0.0).astype(flt32)
-        return ricker
+        return gauswavf
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
