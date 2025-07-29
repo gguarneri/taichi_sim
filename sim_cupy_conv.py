@@ -72,11 +72,8 @@ class SimulatorCupyConv(Simulator):
 
         # Calculo dos indices para o staggered grid
         ord = self._coefs.shape[0]
-        idx_fd = np.array([[c + ord,  # ini half grid
-                            -c + ord - 1,  # ini full grid
-                            c - ord + 1,  # fin half grid
-                            -c - ord]  # fin full grid
-                        for c in range(ord)], dtype=np.int32)
+        idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(ord)], dtype=int32)
+        last = ord - 1
 
         # Definicao dos limites para a plotagem dos campos
         v_max = 100.0
@@ -87,8 +84,7 @@ class SimulatorCupyConv(Simulator):
         iy_max = self._roi.get_iz_max()
 
         # Inicializa os mapas dos parametros de Lame
-        kappa_gpu = cupy.asarray(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx *
-                                 self._dt * self._one_dx * self._one_dy)
+        kappa_gpu = cupy.asarray(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt)
 
         # Cria o kernel do filtro para o calculo das derivadas parciais
         x_kernel = np.concatenate((self._coefs[::-1], -self._coefs))[:, np.newaxis]
@@ -104,15 +100,13 @@ class SimulatorCupyConv(Simulator):
         for it in range(1, self._n_steps + 1):
             # Calculo da pressao
             # Primeiro "laco" i: 1,NX-1; j: 2,NY -> [1:-2, 2:-1]
-            i_dix = idx_fd[0, 1]
-            i_dfx = idx_fd[0, 3]
-            i_diy = idx_fd[0, 0]
-            i_dfy = idx_fd[0, 2]
+            i_dix = idx_fd[last, 1]
+            i_dfx = idx_fd[last, 3]
+            i_diy = idx_fd[last, 0]
+            i_dfy = idx_fd[last, 2]
 
-            value_dvx_dx_gpu[i_dix:i_dfx, i_diy:i_dfy] = signal.convolve2d(
-                vx_gpu[i_dix + 1:i_dfx + 1, i_diy:i_dfy], x_kernel_gpu, mode='same')
-            value_dvy_dy_gpu[i_dix:i_dfx, i_diy:i_dfy] = signal.convolve2d(
-                vy_gpu[i_dix:i_dfx, i_diy:i_dfy], y_kernel_gpu, mode='same')
+            value_dvx_dx_gpu[i_dix:i_dfx, :] = signal.convolve2d(vx_gpu, x_kernel_gpu, mode='valid')
+            value_dvy_dy_gpu[:, i_diy:i_dfy] = signal.convolve2d(vy_gpu, y_kernel_gpu, mode='valid')
 
             memory_dvx_dx_gpu[i_dix:i_dfx, i_diy:i_dfy] = (
                     b_x_half_gpu[:-1, :] * memory_dvx_dx_gpu[i_dix:i_dfx, i_diy:i_dfy] +
@@ -138,13 +132,12 @@ class SimulatorCupyConv(Simulator):
 
             # Calculo da velocidade
             # Primeiro "laco" i: 2,NX; j: 2,NY -> [2:-1, 2:-1]
-            i_dix = idx_fd[0, 0]
-            i_dfx = idx_fd[0, 2]
-            i_diy = idx_fd[0, 0]
-            i_dfy = idx_fd[0, 2]
+            i_dix = idx_fd[last, 0]
+            i_dfx = idx_fd[last, 2]
+            i_diy = idx_fd[last, 0]
+            i_dfy = idx_fd[last, 2]
 
-            value_dpressure_dx_gpu[i_dix:i_dfx, i_diy:i_dfy] = signal.convolve2d(
-                pressure_gpu[i_dix:i_dfx, i_diy:i_dfy], x_kernel_gpu, mode='same')
+            value_dpressure_dx_gpu[i_dix:i_dfx, :] = signal.convolve2d(pressure_gpu, x_kernel_gpu, mode='valid')
 
             memory_dpressure_dx_gpu[i_dix:i_dfx, i_diy:i_dfy] = (
                     b_x_gpu[1:, :] * memory_dpressure_dx_gpu[i_dix:i_dfx, i_diy:i_dfy] +
@@ -157,13 +150,12 @@ class SimulatorCupyConv(Simulator):
             vx_gpu += self._dt * (value_dpressure_dx_gpu / rho_grid_vx_gpu)
 
             # segunda parte:  i: 1,NX-1; j: 1,NY-1 -> [1:-2, 1:-2]
-            i_dix = idx_fd[0, 1]
-            i_dfx = idx_fd[0, 3]
-            i_diy = idx_fd[0, 1]
-            i_dfy = idx_fd[0, 3]
+            i_dix = idx_fd[last, 1]
+            i_dfx = idx_fd[last, 3]
+            i_diy = idx_fd[last, 1]
+            i_dfy = idx_fd[last, 3]
 
-            value_dpressure_dy_gpu[i_dix:i_dfx, i_diy:i_dfy] = signal.convolve2d(
-                pressure_gpu[i_dix:i_dfx, i_diy + 1:i_dfy + 1], y_kernel_gpu, mode='same')
+            value_dpressure_dy_gpu[:, i_diy:i_dfy] = signal.convolve2d(pressure_gpu, y_kernel_gpu, mode='valid')
 
             memory_dpressure_dy_gpu[i_dix:i_dfx, i_diy:i_dfy] = (
                     b_y_half_gpu[:, :-1] * memory_dpressure_dy_gpu[i_dix:i_dfx, i_diy:i_dfy] +
@@ -177,20 +169,20 @@ class SimulatorCupyConv(Simulator):
 
             # Aplica as condicoes de Dirichlet
             # xmin
-            vx_gpu[:ord - 1, :] = ZERO
-            vy_gpu[:ord - 1 , :] = ZERO
+            vx_gpu[:(ord - 1), :] = ZERO
+            vy_gpu[:(ord - 1), :] = ZERO
 
             # xmax
-            vx_gpu[-ord - 1:, :] = ZERO
-            vy_gpu[-ord - 1:, :] = ZERO
+            vx_gpu[-(ord - 1):, :] = ZERO
+            vy_gpu[-(ord - 1):, :] = ZERO
 
             # ymin
-            vx_gpu[:, :ord - 1] = ZERO
-            vy_gpu[:, :ord - 1] = ZERO
+            vx_gpu[:, :(ord - 1)] = ZERO
+            vy_gpu[:, :(ord - 1)] = ZERO
 
             # ymax
-            vx_gpu[:, -ord - 1:] = ZERO
-            vy_gpu[:, -ord - 1:] = ZERO
+            vx_gpu[:, -(ord - 1):] = ZERO
+            vy_gpu[:, -(ord - 1):] = ZERO
 
             # Armazena os sinais dos sensores
             for _i in range(self._idx_rec.shape[0]):
@@ -205,8 +197,8 @@ class SimulatorCupyConv(Simulator):
             psn2 = cupy.max(cupy.abs(pressure_gpu)).astype(flt32)
             if (it % self._it_display) == 0 or it == 5:
                 if self._show_debug:
-                    print(f'Time step # {it} out of {self._n_steps}')
-                    print(f'Max pressure = {psn2}')
+                    print(f"Time step {it} out of {self._n_steps}")
+                    print(f"Max absolute value of pressure = {psn2}")
 
                 if self._show_anim:
                     self._windows_gpu[0].imv.setImage(pressure_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
@@ -215,7 +207,7 @@ class SimulatorCupyConv(Simulator):
             # Verifica a estabilidade da simulacao
             if psn2 > STABILITY_THRESHOLD:
                 raise StabilityError("Simulacao tornando-se instavel", psn2)
-                
+            
         sim_time = time() - t_gpu
 
         # Pega os resultados da simulacao

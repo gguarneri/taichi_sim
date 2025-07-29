@@ -621,7 +621,7 @@ fn pressure_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         let rho = get_rho(x, y);
         let cp  = get_cp(x, y);
         let kappa: f32 = rho * cp * cp;
-        let pressure: f32 = get_pressure(x, y) + kappa*(vdvx_dx + vdvy_dy)* dt * one_dx * one_dy;
+        let pressure: f32 = get_pressure(x, y) + kappa*(vdvx_dx + vdvy_dy)* dt;
         set_pressure(x, y, pressure);
     }
 }

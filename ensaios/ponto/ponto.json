@@ -52,7 +52,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 2000,
+    "time_steps": 1500,
     "dt": 2.6e-4,
     "acc": 2,
     "it_display": 10

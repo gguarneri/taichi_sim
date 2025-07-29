@@ -68,8 +68,7 @@ class SimulatorCpuBroadcast(Simulator):
         iy_max = self._roi.get_iz_max()
 
         # Inicializa os mapas dos parametros de Lame
-        kappa = (self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx *
-                 self._dt * self._one_dx * self._one_dy)
+        kappa = (self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt)
         
         # Acrescenta eixo se source_term for array unidimensional
         if self._n_pto_src == 1:
