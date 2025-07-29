@@ -75,11 +75,7 @@ class SimulatorCupyCuda(Simulator):
 
         # Calculo dos indices para o staggered grid
         ord = self._coefs.shape[0]
-        idx_fd = np.array([[c + ord,  # ini half grid
-                            -c + ord - 1,  # ini full grid
-                            c - ord + 1,  # fin half grid
-                            -c - ord]  # fin full grid
-                        for c in range(ord)], dtype=np.int32)
+        idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(ord)], dtype=int32)
         d_idx_fd = cupy.asarray(idx_fd)
 
         # Definicao dos limites para a plotagem dos campos
@@ -134,7 +130,6 @@ class SimulatorCupyCuda(Simulator):
             for _isrc in range(self._n_pto_src):
                 d_pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (source_term[it - 1, _isrc] *
                                                                          self._dt * self._one_dx * self._one_dy)
-
             # Calculo da velocidade vx
             velocity_vx_kernel(
                 grid_velocity, block_size,
@@ -160,7 +155,7 @@ class SimulatorCupyCuda(Simulator):
             # Aplica as condicoes de Dirichlet
             dirichlet_boundary_kernel(
                 grid_boundary, block_size,
-                (d_vx, d_vy, cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord))
+                (d_vx, d_vy, d_idx_fd, cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord))
             )
 
             # Armazena os sinais dos sensores
