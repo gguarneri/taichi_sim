@@ -288,8 +288,11 @@ class Simulator:
                 # Compara o resultado com a referencia (CPU-broadcast)
                 try:
                     # Compara o resultado do campo de pressao com o valor de referência
-                    pressure_ref = np.load(result_dir + "/result_ref_field_pressure.npy")
-                    pressure = results_dict["pressure"]
+                    pressure_ref = np.load(result_dir + "/result_ref_field_pressure.npy")[self._roi.get_ix_min():self._roi.get_ix_max(),
+                            self._roi.get_iz_min():self._roi.get_iz_max()]
+                    
+                    pressure = results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
+                            self._roi.get_iz_min():self._roi.get_iz_max()]
                     if pressure_ref.shape == pressure.shape:
                         mse_pressure = np.mean((pressure_ref - pressure) ** 2)
                     else:
