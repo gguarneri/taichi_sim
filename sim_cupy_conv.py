@@ -87,8 +87,7 @@ class SimulatorCupyConv(Simulator):
         iy_max = self._roi.get_iz_max()
 
         # Inicializa os mapas dos parametros de Lame
-        kappa_gpu = cupy.asarray(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx *
-                                 self._dt * self._one_dx * self._one_dy)
+        kappa_gpu = cupy.asarray(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt)
 
         # Cria o kernel do filtro para o calculo das derivadas parciais
         x_kernel = np.concatenate((self._coefs[::-1], -self._coefs))[:, np.newaxis]

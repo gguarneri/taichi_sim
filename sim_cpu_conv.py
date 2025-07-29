@@ -68,8 +68,7 @@ class SimulatorCpuConv(Simulator):
         iy_max = self._roi.get_iz_max()
 
         # Inicializa os mapas dos parametros de Lame
-        kappa = (self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx *
-                 self._dt * self._one_dx * self._one_dy)
+        kappa = (self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt)
 
         # Cria o kernel do filtro para o calculo das derivadas parciais
         kernel_base = np.concatenate((self._coefs[::-1], -self._coefs))[:, np.newaxis]

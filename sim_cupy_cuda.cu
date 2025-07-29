@@ -69,7 +69,7 @@ void pressure_kernel(
             value_dvx_dx[idx] = dvx_dx;
             value_dvy_dy[idx] = dvy_dy;
 
-            float pressure_new = pressure[idx] + kappa_unrelaxed[idx] * (dvx_dx + dvy_dy) * dt * one_dx * one_dy;
+            float pressure_new = pressure[idx] + kappa_unrelaxed[idx] * (dvx_dx + dvy_dy) * dt;
             pressure[idx] = pressure_new;
         }
     }

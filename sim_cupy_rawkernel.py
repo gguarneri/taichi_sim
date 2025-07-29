@@ -68,7 +68,7 @@ class SimulatorCupyRawkernel(Simulator):
                 mdvx_dx[x, y] = mdvx_dx_new
                 mdvy_dy[x, y] = mdvy_dy_new
 
-                pressure[x, y] += kappa[x, y]*(vdvx_dx + vdvy_dy) * dt * one_dx * one_dy
+                pressure[x, y] += kappa[x, y]*(vdvx_dx + vdvy_dy) * dt
         
         # Velocidades
         @cupyx.jit.rawkernel()
