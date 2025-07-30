@@ -60,6 +60,14 @@
             "program": "${workspaceFolder}/sim_cpu_conv.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        }
+        },
+        {
+            "name": "Ponto CPU-broadcast-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_broadcast_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
     ]
 }
