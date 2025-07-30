@@ -52,10 +52,10 @@
   ],
   "simul_params":
   {
-    "time_steps": 2500,
+    "time_steps": 1500,
     "dt": 2.6e-4,
     "acc": 2,
-    "it_display": 5
+    "it_display": 10
   },
   "simul_configs":
   {

@@ -11,7 +11,8 @@ import pyqtgraph as pg
 from sim_support import *
 from sim_support.emission_law import EmissionLaw
 from sim_support.windows_qt import Window
-from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint)
+from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint)   
+        
 
 class Simulator:
     def __init__(self, file_config):
@@ -26,39 +27,27 @@ class Simulator:
             self._configs = ast.literal_eval(f.read())
 
         # Configuracao da simulacao
-        self._deriv_acc = self._configs["simul_params"]["acc"] if "acc" in self._configs["simul_params"] else 2
+        self._deriv_acc = self._configs.get("simul_params", 2).get("acc", 2)
         try:
             self._coefs = np.array(coefs_Lui[self._deriv_acc - 2], dtype=flt32)
         except IndexError:
             print(f"Acurácia das derivadas {self._deriv_acc} não suportada. Usando o maior valor permitido (6).")
             self._coefs = np.array(coefs_Lui[-1], dtype=flt32)
         
-        self._n_steps = self._configs["simul_params"]["time_steps"]
-        self._dt = flt32(self._configs["simul_params"]["dt"])
-        self._it_display = self._configs["simul_params"]["it_display"]
+        self._n_steps = self._configs.get("simul_params", 1000).get("time_steps", 1000)
+        self._dt = flt32(self._configs.get("simul_params", 1.0).get("dt", 1.0))
+        self._it_display = self._configs.get("simul_params", 10).get("it_display", 10)
 
         # Configuracao do corpo de prova
-        if "cp" in self._configs["specimen_params"]:
-            self._cp = flt32(self._configs["specimen_params"]["cp"])  # [mm/us]
-        else:
-            self._cp = flt32(5.9)
-
+        self._cp = flt32(self._configs.get("specimen_params", 5.9).get("cp", 5.9))  # [mm/us]
         if "cp_map" in self._configs["specimen_params"]:
             self._cp_map = np.load(self._configs["specimen_params"]["cp_map"]).astype(flt32)
         
-        if "cs" in self._configs["specimen_params"]:
-            self._cs = flt32(self._configs["specimen_params"]["cs"])  # [mm/us]
-        else:
-            self._cs = flt32(3.23)
-
+        self._cs = flt32(self._configs.get("specimen_params", 3.23).get("cs", 3.23))  # [mm/us]
         if "cs_map" in self._configs["specimen_params"]:
             self._cs_map = np.load(self._configs["specimen_params"]["cs_map"]).astype(flt32)
 
-        if "rho" in self._configs["specimen_params"]:
-            self._rho = flt32(self._configs["specimen_params"]["rho"])
-        else:
-            self._rho = flt32(7800.0)
-
+        self._rho = flt32(self._configs.get("specimen_params", 7800.0).get("rho", 7800.0))  # [mm/us]
         if "rho_map" in self._configs["specimen_params"]:
             self._rho_map = np.load(self._configs["specimen_params"]["rho_map"]).astype(flt32)
 
@@ -130,8 +119,8 @@ class Simulator:
                 self._probes.append(SimulationProbePoint(**p["point"], dec=self._roi.get_dec()))
                 
             self._gain = max(self._gain, flt32(self._probes[idx_p]._gain) if hasattr(self._probes[idx_p], "_gain") else 0.0)
-
-
+            
+                
         # Pega as listas de todos os pontos transmissores e receptores de todos os transdutores configurados
         i_probe_tx_ptos = list()
         i_probe_rx_ptos = list()
@@ -188,18 +177,18 @@ class Simulator:
         self._k_y_half = np.expand_dims(k_y_half.astype(flt32), axis=0)
         
         # Configuracao geral dos ensaios
-        self._n_iter = self._configs["simul_configs"]["n_iter"] if "n_iter" in self._configs["simul_configs"] else 1
-        self._show_anim = bool(self._configs["simul_configs"]["show_anim"]) if "show_anim" in self._configs["simul_configs"] else False
-        self._show_debug = bool(self._configs["simul_configs"]["show_debug"]) if "show_debug" in self._configs["simul_configs"] else False
-        self._show_figs = bool(self._configs["simul_configs"]["show_figs"]) if "show_figs" in self._configs["simul_configs"] else False
-        self._plot_results = bool(self._configs["simul_configs"]["plot_results"]) if "plot_results" in self._configs["simul_configs"] else False
-        self._plot_sensors = bool(self._configs["simul_configs"]["plot_sensors"]) if "plot_sensors" in self._configs["simul_configs"] else False
-        self._plot_bscan = bool(self._configs["simul_configs"]["plot_bscan"]) if "plot_bscan" in self._configs["simul_configs"] else False
-        self._save_results = bool(self._configs["simul_configs"]["save_results"]) if "save_results" in self._configs["simul_configs"] else False
-        self._save_sensors = bool(self._configs["simul_configs"]["save_sensors"]) if "save_sensors" in self._configs["simul_configs"] else False
-        self._save_bscan = bool(self._configs["simul_configs"]["save_bscan"]) if "save_bscan" in self._configs["simul_configs"] else False
-        self._save_sources = bool(self._configs["simul_configs"]["save_sources"]) if "save_sources" in self._configs["simul_configs"] else False
-        self._source_env = bool(self._configs["simul_configs"]["source_env"]) if "source_env" in self._configs["simul_configs"] else False
+        self._n_iter = self._configs.get("simul_configs",1).get("n_iter", 1)
+        self._show_anim = bool(self._configs.get("simul_configs", False).get("show_anim", False))
+        self._show_debug = bool(self._configs.get("simul_configs", False).get("show_debug", False))
+        self._show_figs = bool(self._configs.get("simul_configs", False).get("show_figs", False))
+        self._plot_results = bool(self._configs.get("simul_configs", False).get("plot_results", False))
+        self._plot_sensors = bool(self._configs.get("simul_configs", False).get("plot_sensors", False))
+        self._plot_bscan = bool(self._configs.get("simul_configs", False).get("plot_bscan", False))
+        self._save_results = bool(self._configs.get("simul_configs", False).get("save_results", False))
+        self._save_sensors = bool(self._configs.get("simul_configs", False).get("save_sensors", False))
+        self._save_bscan = bool(self._configs.get("simul_configs", False).get("save_bscan", False))
+        self._save_sources = bool(self._configs.get("simul_configs", False).get("save_sources", False))
+        self._source_env = bool(self._configs.get("simul_configs", False).get("source_env", False))
         if "emission_laws" in self._configs["simul_configs"] and os.path.isfile(self._configs["simul_configs"]["emission_laws"]):
             self._emission_laws, _ = EmissionLaw.read_law(self._configs["simul_configs"]["emission_laws"])
         if "results_dir" in self._configs["simul_configs"] and os.path.isdir(self._configs["simul_configs"]["results_dir"]):
@@ -295,12 +284,15 @@ class Simulator:
                 result_dir = self._results_dir if hasattr(self, "_results_dir") else "."
                 name = (f'{result_dir}/result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_law_{law}')
-
+                
                 # Compara o resultado com a referencia (CPU-broadcast)
                 try:
                     # Compara o resultado do campo de pressao com o valor de referência
-                    pressure_ref = np.load(result_dir + "/result_ref_field_pressure.npy")
-                    pressure = results_dict["pressure"]
+                    pressure_ref = np.load(result_dir + "/result_ref_field_pressure.npy")[self._roi.get_ix_min():self._roi.get_ix_max(),
+                            self._roi.get_iz_min():self._roi.get_iz_max()]
+
+                    pressure = results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
+                            self._roi.get_iz_min():self._roi.get_iz_max()]
                     if pressure_ref.shape == pressure.shape:
                         mse_pressure = np.mean((pressure_ref - pressure) ** 2)
                     else:
@@ -313,11 +305,11 @@ class Simulator:
                         mse_sens_pressure = np.mean((sens_pressure_ref - sens_pressure) ** 2)
                     else:
                         mse_sens_pressure = np.inf
-
+                        
                     print(f"MSE do campo de pressao em relacao a referencia: {mse_pressure:.4}")
                     print(f"MSE dos sensores de pressao em relacao a referencia: {mse_sens_pressure:.4}")
                     mse_values.append([mse_pressure, mse_sens_pressure])
-
+                        
                 except FileNotFoundError as err:
                     print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
 
@@ -334,7 +326,7 @@ class Simulator:
 
                     if self._show_figs:
                         plt.show(block=False)
-
+                        
                     # Salva a imagem do campo de pressao
                     if self._save_results:
                         pressure_sim_result.savefig(name + '_field_pressure.png')
@@ -350,16 +342,27 @@ class Simulator:
                         plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
                         plt.plot(results_dict["sens_pressure"][:, r])
 
+                        # Pega a coordenada do primeiro emissor
+                        for _pr in self._probes:
+                            if all(val is True for val in _pr.emitters):
+                                coord_emitter = _pr.coord_center
+                                t0_emission = _pr._t0_emission
+                                break
+
+                        # Pega a coordenada do primeiro receptor
+                        for _pr in self._probes:
+                            if all(val is True for val in _pr.receivers):
+                                coord_receiver = _pr.coord_center
+                                break
+
+                        rd = np.sqrt(np.sum((coord_emitter - coord_receiver)**2))
+                        td = rd / self._cp + t0_emission
+                        ntd = td / self._dt
+                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]), np.max(results_dict["sens_pressure"][:, r])], label="Posição esperada eco")
+
                         # Salva a imagem do sensor
                         if self._save_sensors:
                                 sensor_pressure_result.savefig(name + f'_sensor_{r}.png')
-                        rd = self._dx * np.sqrt((self._ix_src - self._ix_rec)**2 + (
-                        self._iy_src - self._iy_rec)**2)
-                        td = rd / self._cp + self._probes[0]._t0_emission
-                        ntd = td / self._dt
-                        # print(ntd, self._ix_src, self._iy_src, self._ix_rec, self._iy_rec)
-                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]), np.max(results_dict["sens_pressure"][:, r])], label="Posição esperada eco")
-                        # sensors_result.append(sensor_pressure_result)
 
                     if self._show_figs:
                         plt.show(block=False)
@@ -376,8 +379,8 @@ class Simulator:
                     # Salva a imagem b-scan dos valores dos sensores de pressao
                     if self._save_bscan:
                         bscan_pressure_result.savefig(name + '_bscan_pressure.png')
-
-                # Salva o array com os valores dos sensores de pressao
+                
+                # Salva o array com os valores dos sensores de pressao        
                 if self._save_bscan:
                     np.save(name + '_bscan_pressure', results_dict["sens_pressure"])
 
@@ -387,7 +390,7 @@ class Simulator:
         print(f'TEMPO - {self._n_steps} pontos de tempo')
         if self._n_iter > 5:
             print(f'Tempo medio de execucao: {sim_times[5:].mean():.3}s (std = {sim_times[5:].std():.4})')
-
+            
         if self._n_iter > 5 and mse_values.shape[0] > 5:
             print(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4} (std = {mse_values[5:, 0].std():.4})')
             print(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4} (std = {mse_values[5:, 1].std():.4})')
