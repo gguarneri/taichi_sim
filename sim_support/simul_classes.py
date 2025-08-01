@@ -1015,10 +1015,15 @@ class SimulationProbePoint(SimulationProbe):
             else:
                 gp[np.abs(gp) < eps] = 0.0
                 ss = flt32(gp)
-
-        gauswavf = np.diff(self._gain * np.float32(ss) / dt, append=0.0).astype(flt32)
-        ricker = np.diff(gauswavf / dt, append=0.0).astype(flt32)
-        return gauswavf
+        
+        ref = pow(10.0, -6 / 20.0)
+        a = -(np.pi * self._freq * self._bw) ** 2 / (4.0 * np.log(ref))
+        tg = t - self._t0_emission
+        gauswavf = np.exp(-a*tg**2)*((-2*a*tg)*np.cos(2*np.pi*self._freq*tg) + (-2*np.pi*self._freq)*np.sin(2*np.pi*self._freq*tg))
+        gauswavf = gauswavf.astype(flt32)
+        ricker = np.exp(-a*tg**2) * ((4*a**2*tg**2 - 2*a - (2*np.pi*self._freq)**2)*np.cos(2*np.pi*self._freq*tg) + (8*np.pi*a*self._freq*tg)*np.sin(2*np.pi*self._freq*tg))
+        ricker = ricker.astype(flt32)
+        return ricker
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """

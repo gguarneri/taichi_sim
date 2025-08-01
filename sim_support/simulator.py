@@ -343,6 +343,7 @@ class Simulator:
                         plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
                         plt.plot(results_dict["sens_pressure"][:, r], label='simulated')
                         plt.plot(bscan_ref, label='reference')
+                        plt.legend()
                         
                         # Pega a coordenada do primeiro emissor
                         for _pr in self._probes:

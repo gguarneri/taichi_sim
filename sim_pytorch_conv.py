@@ -84,7 +84,7 @@ class SimulatorCupyCuda(Simulator):
                 
             for _isrc in range(self._n_pto_src):
                 u_1[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[n - 1, _isrc] * 
-                                                                           dt**2 * self._one_dx * self._one_dy)
+                                                                           dt**2 * self._one_dx * self._one_dy) * 1e5
 
             u_0 = u
             u = u_1
