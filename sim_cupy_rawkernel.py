@@ -182,8 +182,6 @@ class SimulatorCupyRawkernel(Simulator):
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
         # Transfere arrays de parametros para a GPU
-        coefs_gpu = cupy.asarray(self._coefs)
-        
         a_x_gpu = cupy.asarray(self._a_x.flatten())
         b_x_gpu = cupy.asarray(self._b_x.flatten())
         k_x_gpu = cupy.asarray(self._k_x.flatten())
@@ -198,9 +196,9 @@ class SimulatorCupyRawkernel(Simulator):
         k_y_half_gpu = cupy.asarray(self._k_y_half.flatten())
         
         rho_grid_vx_gpu = cupy.asarray(self._rho_grid_vx)
-        rho_grid_vy_gpu = cupy.asarray(self._rho_grid_vy)        
+        rho_grid_vy_gpu = cupy.asarray(self._rho_grid_vy)
+        coefs_gpu = cupy.asarray(self._coefs)
         
-
         # Arrays para as variaveis de memoria do calculo
         memory_dvx_dx_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
         memory_dvy_dy_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
@@ -264,7 +262,7 @@ class SimulatorCupyRawkernel(Simulator):
                                                      self._dt, self._one_dx, self._one_dy, pressure_l2_norm_gpu,
                                                      self._nx, self._ny, ord)
                   
-            # Adicao da fonte no campo de pressao
+            # Adicao das fontes no campo de pressao
             sources_kernel[grid_fields, block_size](pressure_gpu, source_term_gpu, idx_src_gpu,
                                                     it, self._dt, self._one_dx, self._one_dy)
 
@@ -281,7 +279,7 @@ class SimulatorCupyRawkernel(Simulator):
             finish_it_kernel[grid_fields, block_size](vx_gpu, vy_gpu, pressure_gpu, idx_fd_gpu,
                                                       pressure_l2_norm_gpu, self._nx, self._ny, ord)
 
-            # Store seismograms
+            # Armazena os sinais dos sensores
             store_sensors_kernel[grid_sens, sens_blk_sz](vx_gpu, vy_gpu, pressure_gpu,
                                    sens_vx_gpu, sens_vy_gpu, sens_pressure_gpu,
                                    offset_sensors_gpu, info_rec_pt_gpu, delay_rec_gpu, it)
