@@ -18,13 +18,17 @@ from sim_support.simulator import Simulator
 class SimulatorCpuBroadcastUnsplit(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
-        super().__init__(file_config)
+        super().__init__(file_config, ord_source=2)
         
         # Define o nome do simulador
         self._name = "CPU-broadcast-unsplit"
-        
-        # Ajusta o termo de fonte para a segunda derivada da função gaussiana (Ricker)
-        self._source_term = np.diff(self._source_term / (self._dt * self._gain * 1189.1068), append=0.0).astype(flt32)
+              
+        # Modifica os coeficientes para o calculo das derivadas
+        try:
+            self._coefs = np.array(coefs_forward[self._deriv_acc - 2], dtype=flt32)
+        except IndexError:
+            print(f"Acurácia das derivadas {self._deriv_acc} não suportada. Usando o maior valor permitido (6).")
+            self._coefs = np.array(coefs_forward[-1], dtype=flt32)
         
         
     def implementation(self):
@@ -53,7 +57,7 @@ class SimulatorCpuBroadcastUnsplit(Simulator):
         sens_pressure = np.zeros((self._n_steps, self._n_rec), dtype=flt32)
         
         # Calculo dos indices para as derivadas
-        ord = self._coefs.shape[0]
+        ord = self._deriv_acc
         idx_fd = np.array([[c + ord,  # ini half grid
                             -c + ord - 1,  # ini full grid
                             c - ord + 1,  # fin half grid
@@ -78,13 +82,18 @@ class SimulatorCpuBroadcastUnsplit(Simulator):
         # Inicio do laco de tempo
         t_gpu = time()
         for it in range(1, self._n_steps + 1):
-            # Calculo da primeira derivada da pressao em relacao a x
+            # Calculo da primeira derivada (forward) da pressao em relacao a x
             ia = idx_fd[0, 1]
             fa = idx_fd[0, 3]
-            ib = idx_fd[0, 0]
-            fb = idx_fd[0, 2]
             
-            dpressure_dx[ia:fa, :] = (pressure_present[ib:fb, :] - pressure_present[ia:fa, :]) * self._one_dx
+            for c, offset in enumerate([i - (ord - 1) for i in range(ord * 2)]):
+                ib = None if ia + offset == 0 else ia + offset
+                fb = None if fa + offset == 0 else fa + offset
+                if c:
+                    dpressure_dx[ia:fa, :] += self._coefs[c] * pressure_present[ib:fb, :] * self._one_dx
+                    
+                else:
+                    dpressure_dx[ia:fa, :] = self._coefs[c] * pressure_present[ib:fb, :] * self._one_dx
             
             memory_dpressure_dx[ia:fa, :] = (self._b_x_half[:-1, :] * memory_dpressure_dx[ia:fa, :] +
                                              self._a_x_half[:-1, :] * dpressure_dx[ia:fa, :])
@@ -92,8 +101,15 @@ class SimulatorCpuBroadcastUnsplit(Simulator):
             dpressure_dx[ia:fa, :] = dpressure_dx[ia:fa, :] / self._k_x_half[:-1, :] + memory_dpressure_dx[ia:fa, :]
             dpressure_dx /= self._rho_grid_vx
             
-            # Calculo da primeira derivada da pressao em relacao a y
-            dpressure_dy[:, ia:fa] = (pressure_present[:, ib:fb] - pressure_present[:, ia:fa]) * self._one_dy
+            # Calculo da primeira derivada (forward) da pressao em relacao a y
+            for c, offset in enumerate([i - (ord - 1) for i in range(ord * 2)]):
+                ib = None if ia + offset == 0 else ia + offset
+                fb = None if fa + offset == 0 else fa + offset
+                if c:
+                    dpressure_dy[:, ia:fa] += self._coefs[c] * pressure_present[:, ib:fb] * self._one_dy
+                    
+                else:
+                    dpressure_dy[:, ia:fa] = self._coefs[c] * pressure_present[:, ib:fb] * self._one_dy
             
             memory_dpressure_dy[:, ia:fa] = (self._b_y_half[:, :-1] * memory_dpressure_dy[:, ia:fa] +
                                              self._a_y_half[:, :-1] * dpressure_dy[:, ia:fa])
@@ -101,20 +117,34 @@ class SimulatorCpuBroadcastUnsplit(Simulator):
             dpressure_dy[:, ia:fa] = dpressure_dy[:, ia:fa] / self._k_y_half[:, :-1] + memory_dpressure_dy[:, ia:fa]
             dpressure_dy /= self._rho_grid_vy
             
-            # Calculo da segunda derivada da pressao em relacao a x
+            # Calculo da segunda derivada (backward) da pressao em relacao a x
             ia = idx_fd[0, 0]
             fa = idx_fd[0, 2]
-            ib = idx_fd[0, 1]
-            fb = idx_fd[0, 3]
-            dpressurexx_dx[ia:fa, :] = (dpressure_dx[ia:fa, :] - dpressure_dx[ib:fb, :]) * self._one_dx
+            for c, offset in enumerate([(ord - 1) - i for i in range((ord * 2) - 1, -1, -1)]):
+                ib = None if ia + offset == 0 else ia + offset
+                fb = None if fa + offset == 0 else fa + offset
+                ic = (2*ord - 1) - c
+                if c:
+                    dpressurexx_dx[ia:fa, :] += -self._coefs[ic] * dpressure_dx[ib:fb, :] * self._one_dx
+                    
+                else:
+                    dpressurexx_dx[ia:fa, :] = -self._coefs[ic] * dpressure_dx[ib:fb, :] * self._one_dx
 
             memory_dpressurexx_dx[ia:fa, :] = (self._b_x[1:, :] * memory_dpressurexx_dx[ia:fa, :] + 
                                                self._a_x[1:, :] * dpressurexx_dx[ia:fa, :])
 
             dpressurexx_dx[ia:fa, :] = dpressurexx_dx[ia:fa, :] / self._k_x[1:, :] + memory_dpressurexx_dx[ia:fa, :]
             
-            # Calculo da segunda derivada da pressao em relacao a y
-            dpressureyy_dy[:, ia:fa] = (dpressure_dy[:, ia:fa] - dpressure_dy[:, ib:fb]) * self._one_dy
+            # Calculo da segunda derivada (backward) da pressao em relacao a y
+            for c, offset in enumerate([(ord - 1) - i for i in range((ord * 2) - 1, -1, -1)]):
+                ib = None if ia + offset == 0 else ia + offset
+                fb = None if fa + offset == 0 else fa + offset
+                ic = (2*ord - 1) - c
+                if c:
+                    dpressureyy_dy[:, ia:fa] += -self._coefs[ic] * dpressure_dy[:, ib:fb] * self._one_dy
+                    
+                else:
+                    dpressureyy_dy[:, ia:fa] = -self._coefs[ic] * dpressure_dy[:, ib:fb] * self._one_dy
 
             memory_dpressureyy_dy[:, ia:fa] = (self._b_y[:, 1:] * memory_dpressureyy_dy[:, ia:fa] + 
                                                self._a_y[:, 1:] * dpressureyy_dy[:, ia:fa])
@@ -127,7 +157,7 @@ class SimulatorCpuBroadcastUnsplit(Simulator):
             # Adicao das fontes no campo futuro de pressao
             for _isrc in range(self._n_pto_src):
                 pressure_future[self._ix_src[_isrc], self._iy_src[_isrc]] += (self._source_term[it - 1, _isrc] * self._dt**2 *
-                                                                              flt32(4.0 * PI) * self._cp**2)
+                                                                              self._one_dx * self._one_dy)
 
             # Aplica as condicoes de Dirichlet
             # xmin
