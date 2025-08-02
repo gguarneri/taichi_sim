@@ -141,9 +141,9 @@ class SimulatorCupyRawkernelUnsplit(Simulator):
             
             last = ord - 1
             i_dix = -idx_fd[last, 2]
-            i_dfx = nx - idx_fd[last, 0]
+            i_dfx = nx - idx_fd[last, 1]
             i_diy = -idx_fd[last, 2]
-            i_dfy = ny - idx_fd[last, 0]
+            i_dfy = ny - idx_fd[last, 1]
             p_2_old = p_2[0]
 
             # Aplica as condicoes de Dirichlet
