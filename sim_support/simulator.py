@@ -15,7 +15,7 @@ from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray
         
 
 class Simulator:
-    def __init__(self, file_config):
+    def __init__(self, file_config, ord_source=1):
         self._app = None
         self._device = None
         self._name = "simulator"
@@ -202,10 +202,10 @@ class Simulator:
         self._idx_rec_offset = 0
         for _pr in self._probes:
             if self._source_env:
-                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e')
+                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e', ord_der=ord_source)
                 _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
             else:
-                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt)
+                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, ord_der=ord_source)
                 _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
             if len(i_src) > 0:
                 source_term.append(st)
@@ -222,10 +222,6 @@ class Simulator:
             self._source_term = np.concatenate(source_term, axis=1)
         else:
             self._source_term = source_term[0]
-
-        if self._save_sources:
-            np.save(f'{self._results_dir}/sources_webgpu_{datetime.now().strftime("%Y%m%d-%H%M%S")}',
-                    self._source_term)
 
         self._pos_sources = -np.ones((self._nx, self._ny), dtype=int32)
         self._pos_sources[self._ix_src, self._iy_src] = np.array(idx_src).astype(int32).flatten()
@@ -330,7 +326,7 @@ class Simulator:
                     # Salva a imagem do campo de pressao
                     if self._save_results:
                         pressure_sim_result.savefig(name + '_field_pressure.png')
-
+                
                 # Salva o campo de pressao
                 if self._save_results:
                     np.save(name + '_field_pressure', results_dict["pressure"])
@@ -395,6 +391,10 @@ class Simulator:
             print(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4} (std = {mse_values[5:, 0].std():.4})')
             print(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4} (std = {mse_values[5:, 1].std():.4})')
 
+        if self._save_sources:
+            name = f'{result_dir}/sources_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}'
+            np.save(name, self._source_term)
+        
         if self._save_results:
             name = (f'{result_dir}/result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_')
@@ -422,8 +422,8 @@ class Simulator:
                 else:
                     f.write(f'Tempo execucao: {sim_times[-1]:.3}s\n')
                     if mse_values.shape[0] > 0:
-                        f.write(f'MSE do campo de pressao: {mse_values[-1:, 0]:.4}\n')
-                        f.write(f'MSE medio dos sensores de pressao: {mse_values[-1:, 1]:.4}\n')
+                        f.write(f'MSE do campo de pressao: {mse_values[-1, 0]:.4}\n')
+                        f.write(f'MSE medio dos sensores de pressao: {mse_values[-1, 1]:.4}\n')
 
         if self._show_figs:
             plt.show(block=False)
