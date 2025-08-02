@@ -69,5 +69,13 @@
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
+        {
+            "name": "Ponto CuPy-rawkernel-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cupy_rawkernel_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
     ]
 }
