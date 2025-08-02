@@ -101,7 +101,7 @@ class SimulatorCupyRawkernelUnsplit(Simulator):
             i_diy = -idx_fd[last, 3]
             i_dfy = ny - idx_fd[last, 1]
 
-            # Calculo das primeiras derivadas (forward) da pressao em relacao a x e y
+            # Calculo das segundas derivadas (backward) da pressao em relacao a x e y
             if(x_i32 >= i_dix and x_i32 < i_dfx and y_i32 >= i_diy and y_i32 < i_dfy):
                 vdpxx_dx = 0.0
                 vdpyy_dy = 0.0
