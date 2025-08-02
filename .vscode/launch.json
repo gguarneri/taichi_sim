@@ -77,5 +77,14 @@
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
+        {
+            "name": "Ponto Numba-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_numba_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json",
+            "env": {"NUMBA_ENABLE_CUDASIM": "0"}
+        },
     ]
 }
