@@ -229,8 +229,8 @@ class SimulatorNumba(Simulator):
 
         # Acrescenta eixo se source_term for array unidimensional
         if self._n_pto_src == 1:
-            self._source_term = self._source_term[:, np.newaxis]
-        source_term_gpu = cuda.to_device(self._source_term)
+            source_term = self._source_term[:, np.newaxis]
+        source_term_gpu = cuda.to_device(source_term)
         idx_src_gpu = cuda.to_device(self._pos_sources)
         
         # Define os tamanhos dos blocos e dos grids para os kernels
