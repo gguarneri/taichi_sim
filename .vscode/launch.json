@@ -86,5 +86,21 @@
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json",
             "env": {"NUMBA_ENABLE_CUDASIM": "0"}
         },
+        {
+            "name": "Ponto CPU-conv-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_conv_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CuPy-conv-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cupy_conv_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
     ]
 }
