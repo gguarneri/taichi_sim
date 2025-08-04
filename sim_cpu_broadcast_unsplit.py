@@ -18,17 +18,10 @@ from sim_support.simulator import Simulator
 class SimulatorCpuBroadcastUnsplit(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
-        super().__init__(file_config, ord_source=2)
+        super().__init__(file_config, sim_model="unsplit")
         
         # Define o nome do simulador
         self._name = "CPU-broadcast-unsplit"
-              
-        # Modifica os coeficientes para o calculo das derivadas
-        try:
-            self._coefs = np.array(coefs_forward[self._deriv_acc - 2], dtype=flt32)
-        except IndexError:
-            print(f"Acurácia das derivadas {self._deriv_acc} não suportada. Usando o maior valor permitido (6).")
-            self._coefs = np.array(coefs_forward[-1], dtype=flt32)
         
         
     def implementation(self):
