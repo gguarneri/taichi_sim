@@ -15,10 +15,11 @@ from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray
         
 
 class Simulator:
-    def __init__(self, file_config):
+    def __init__(self, file_config, sim_model="split"):
         self._app = None
         self._device = None
         self._name = "simulator"
+        self._sim_model = sim_model
         
         # -----------------------
         # Leitura da configuracao no formato JSON
@@ -29,10 +30,21 @@ class Simulator:
         # Configuracao da simulacao
         self._deriv_acc = self._configs.get("simul_params", 2).get("acc", 2)
         try:
-            self._coefs = np.array(coefs_Lui[self._deriv_acc - 2], dtype=flt32)
+            match self._sim_model:
+                case "unsplit":
+                    self._coefs = np.array(coefs_forward[self._deriv_acc - 2], dtype=flt32)
+                    
+                case _:
+                    self._coefs = np.array(coefs_Lui[self._deriv_acc - 2], dtype=flt32)
+            
         except IndexError:
             print(f"Acurácia das derivadas {self._deriv_acc} não suportada. Usando o maior valor permitido (6).")
-            self._coefs = np.array(coefs_Lui[-1], dtype=flt32)
+            match self._sim_model:
+                case "unsplit":
+                    self._coefs = np.array(coefs_forward[-1], dtype=flt32)
+                    
+                case _:
+                    self._coefs = np.array(coefs_Lui[-1], dtype=flt32)
         
         self._n_steps = self._configs.get("simul_params", 1000).get("time_steps", 1000)
         self._dt = flt32(self._configs.get("simul_params", 1.0).get("dt", 1.0))
@@ -52,7 +64,7 @@ class Simulator:
             self._rho_map = np.load(self._configs["specimen_params"]["rho_map"]).astype(flt32)
 
         # Configuracao da ROI
-        pad = self._coefs.shape[0] - 1
+        pad = self._deriv_acc - 1
         if hasattr(self, "_rho_map"):
             self._roi = SimulationROI(**self._configs["roi"], pad=pad, rho_map=self._rho_map)
         else:
@@ -200,12 +212,18 @@ class Simulator:
         idx_rec = list()
         self._idx_src_offset = 0
         self._idx_rec_offset = 0
+        match self._sim_model:
+            case "unsplit":
+                ord_source = 2
+            case _:
+                ord_source = 1
+        
         for _pr in self._probes:
             if self._source_env:
-                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e')
+                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e', ord_der=ord_source)
                 _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
             else:
-                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt)
+                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, ord_der=ord_source)
                 _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
             if len(i_src) > 0:
                 source_term.append(st)
@@ -222,10 +240,6 @@ class Simulator:
             self._source_term = np.concatenate(source_term, axis=1)
         else:
             self._source_term = source_term[0]
-
-        if self._save_sources:
-            np.save(f'{self._results_dir}/sources_webgpu_{datetime.now().strftime("%Y%m%d-%H%M%S")}',
-                    self._source_term)
 
         self._pos_sources = -np.ones((self._nx, self._ny), dtype=int32)
         self._pos_sources[self._ix_src, self._iy_src] = np.array(idx_src).astype(int32).flatten()
@@ -288,8 +302,10 @@ class Simulator:
                 # Compara o resultado com a referencia (CPU-broadcast)
                 try:
                     # Compara o resultado do campo de pressao com o valor de referência
-                    pressure_ref = np.load(result_dir + "/result_ref_field_pressure.npy")[self._roi.get_ix_min():self._roi.get_ix_max(),
-                            self._roi.get_iz_min():self._roi.get_iz_max()]
+                    pressure_ref = np.load(result_dir +
+                                           f"/result_ref_{self._sim_model}_field_pressure.npy")[
+                                               self._roi.get_ix_min():self._roi.get_ix_max(),
+                                               self._roi.get_iz_min():self._roi.get_iz_max()]
                     
                     pressure = results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
                             self._roi.get_iz_min():self._roi.get_iz_max()]
@@ -299,7 +315,7 @@ class Simulator:
                         mse_pressure = np.inf
 
                     # Compara o resultado dos sensores de pressao com o valores de referência
-                    sens_pressure_ref = np.load(result_dir + "/result_ref_bscan_pressure.npy")
+                    sens_pressure_ref = np.load(result_dir + f"/result_ref_{self._sim_model}_bscan_pressure.npy")
                     sens_pressure = results_dict["sens_pressure"]
                     if sens_pressure_ref.shape == sens_pressure.shape:
                         mse_sens_pressure = np.mean((sens_pressure_ref - sens_pressure) ** 2)
@@ -331,7 +347,7 @@ class Simulator:
                     # Salva a imagem do campo de pressao
                     if self._save_results:
                         pressure_sim_result.savefig(name + '_field_pressure.png')
-
+                
                 # Salva o campo de pressao
                 if self._save_results:
                     np.save(name + '_field_pressure', results_dict["pressure"])
@@ -398,6 +414,10 @@ class Simulator:
             print(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4} (std = {mse_values[5:, 0].std():.4})')
             print(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4} (std = {mse_values[5:, 1].std():.4})')
 
+        if self._save_sources:
+            name = f'{result_dir}/sources_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}'
+            np.save(name, self._source_term)
+        
         if self._save_results:
             name = (f'{result_dir}/result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_')
@@ -408,6 +428,7 @@ class Simulator:
                 f.write('--------------------\n')
                 f.write('\n')
                 f.write(f'Simulador: {self._name}\n')
+                f.write(f'Modelo do simulador: {self._sim_model}\n')
                 f.write(f'Quantidade de iteracoes no tempo: {self._n_steps}\n')
                 f.write(f'Tamanho da ROI: {self._nx}x{self._ny}\n')
                 f.write(f'GPU: {results_dict["gpu_str"]}\n')
@@ -425,8 +446,8 @@ class Simulator:
                 else:
                     f.write(f'Tempo execucao: {sim_times[-1]:.3}s\n')
                     if mse_values.shape[0] > 0:
-                        f.write(f'MSE do campo de pressao: {mse_values[-1:, 0]:.4}\n')
-                        f.write(f'MSE medio dos sensores de pressao: {mse_values[-1:, 1]:.4}\n')
+                        f.write(f'MSE do campo de pressao: {mse_values[-1, 0]:.4}\n')
+                        f.write(f'MSE medio dos sensores de pressao: {mse_values[-1, 1]:.4}\n')
 
         if self._show_figs:
             plt.show(block=False)

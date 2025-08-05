@@ -22,6 +22,9 @@ Returns:
 from sim_support import *
 import numpy as np
 from scipy.signal import gausspulse
+from sim_support.gauss_wavelets import (gaussian_pulse,
+                                        gaussian_first_dev_pulse,
+                                        gaussian_second_dev_pulse)
 
 
 class SimulationROI:
@@ -989,7 +992,7 @@ class SimulationProbePoint(SimulationProbe):
 
         return list_out, idx_src
 
-    def get_source_term(self, samples=1000, dt=1.0, out='r'):
+    def get_source_term(self, samples=1000, dt=1.0, out='r', ord_der=1):
         """
         Função que retorna o sinais do termo de fonte do transdutor. Além de retornar um
         *array* com o sinal do termo de fonte de cada elemento ativo do transdutor, esta função
@@ -1007,7 +1010,16 @@ class SimulationProbePoint(SimulationProbe):
         t = np.arange(samples, dtype=flt32) * dt
         ss = np.zeros(samples, dtype=flt32)
         if self.emitters[0]:
-            gp, _, egp = gausspulse((t - self._t0_emission), fc=self._freq, bw=self._bw, retquad=True, retenv=True)
+            if ord_der == 0:
+                # Pulso gaussiano
+                gp, _, egp = gaussian_pulse((t - self._t0_emission), fc=self._freq, bw=self._bw, retquad=True, retenv=True)
+            elif ord_der == 2:
+                # Segunda derivada do pulso gaussiano (Ricker)
+                gp, _, egp = gaussian_second_dev_pulse((t - self._t0_emission), fc=self._freq, bw=self._bw, retquad=True, retenv=True)
+            else:
+                # Primeira derivada do pulso gaussiano
+                gp, _, egp = gaussian_first_dev_pulse((t - self._t0_emission), fc=self._freq, bw=self._bw, retquad=True, retenv=True)
+                
             eps = np.finfo(flt32).eps
             if out == 'e':
                 egp[np.abs(egp) < eps] = 0.0
@@ -1015,15 +1027,8 @@ class SimulationProbePoint(SimulationProbe):
             else:
                 gp[np.abs(gp) < eps] = 0.0
                 ss = flt32(gp)
-        
-        ref = pow(10.0, -6 / 20.0)
-        a = -(np.pi * self._freq * self._bw) ** 2 / (4.0 * np.log(ref))
-        tg = t - self._t0_emission
-        gauswavf = np.exp(-a*tg**2)*((-2*a*tg)*np.cos(2*np.pi*self._freq*tg) + (-2*np.pi*self._freq)*np.sin(2*np.pi*self._freq*tg))
-        gauswavf = gauswavf.astype(flt32)
-        ricker = np.exp(-a*tg**2) * ((4*a**2*tg**2 - 2*a - (2*np.pi*self._freq)**2)*np.cos(2*np.pi*self._freq*tg) + (8*np.pi*a*self._freq*tg)*np.sin(2*np.pi*self._freq*tg))
-        ricker = ricker.astype(flt32)
-        return ricker
+
+        return flt32(self._gain * ss)
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
