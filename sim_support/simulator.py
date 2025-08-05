@@ -330,7 +330,7 @@ class Simulator:
                     print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
 
                 # Plota o mapa de pressao
-                bscan_ref = np.load('ensaios/ponto/results/result_ref_bscan_pressure.npy')
+                bscan_ref = np.load('ensaios/ponto/results/result_ref_unsplit_bscan_pressure.npy')
                 if self._plot_results:
                     pressure_sim_result = plt.figure()
                     plt.title(f'{self._name} simulation pressure - law ({law})\n({self._nx}x{self._ny})')
