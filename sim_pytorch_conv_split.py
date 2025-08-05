@@ -141,7 +141,7 @@ class SimulatorPytorchConvSplit(Simulator):
                 
                 # Adicao das fontes no campo de pressao
                 for _isrc in range(self._n_pto_src):
-                    pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (source_term[it - 1, _isrc] * h)
+                    pressure[self._ix_src[_isrc], self._iy_src[_isrc]] += (source_term[it - 1, _isrc] * h) * 1e5
 
                 # Calculo da velocidade
                 # Primeiro "laco" i: 2,NX; j: 2,NY -> [2:-1, 2:-1]

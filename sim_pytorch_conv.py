@@ -68,10 +68,10 @@ class SimulatorCupyCuda(Simulator):
         def laplacian(x):
             x = x.unsqueeze(0).unsqueeze(0)
             kernel = kernel_1d.view(1, 1, -1, 1)  # derivada em x
-            d2x = F.conv2d(x, kernel, padding=(kernel.shape[2]//2, 0))
+            d2x = F.conv2d(x, kernel, padding='same')
             
             kernel = kernel_1d.view(1, 1, 1, -1)  # derivada em z
-            d2z = F.conv2d(x, kernel, padding=(0, kernel.shape[3]//2))
+            d2z = F.conv2d(x, kernel, padding='same')
 
             return (d2x + d2z).squeeze(0).squeeze(0)
 
