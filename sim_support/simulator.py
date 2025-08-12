@@ -197,6 +197,7 @@ class Simulator:
         self._plot_sensors = bool(self._configs.get("simul_configs", False).get("plot_sensors", False))
         self._plot_bscan = bool(self._configs.get("simul_configs", False).get("plot_bscan", False))
         self._save_results = bool(self._configs.get("simul_configs", False).get("save_results", False))
+        self._save_field = bool(self._configs.get("simul_configs", False).get("save_field", False))
         self._save_sensors = bool(self._configs.get("simul_configs", False).get("save_sensors", False))
         self._save_bscan = bool(self._configs.get("simul_configs", False).get("save_bscan", False))
         self._save_sources = bool(self._configs.get("simul_configs", False).get("save_sources", False))
@@ -349,7 +350,7 @@ class Simulator:
                         pressure_sim_result.savefig(name + '_field_pressure.png')
                 
                 # Salva o campo de pressao
-                if self._save_results:
+                if self._save_results and self._save_field:
                     np.save(name + '_field_pressure', results_dict["pressure"])
 
                 # Plota individualmente os sinais tomados no sensores

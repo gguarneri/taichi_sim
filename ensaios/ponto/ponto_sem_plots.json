@@ -25,16 +25,16 @@
         "id": "probe_emitter",
         "emitter": "True",
         "receiver": "False",
-        "freq": 35.0,
+        "freq": 50.0,
         "bw": 0.9,
-        "gain": 1.0e8,
+        "gain": 1.0e5,
         "pulse_type": "gaussian",
         "coord_center": [
           600.0,
           0.0,
           600.0
         ],
-        "t0_emission": 0.0603174603175
+        "t0_emission": 0.04
       }
     },
     {
@@ -53,13 +53,13 @@
   "simul_params":
   {
     "time_steps": 1500,
-    "dt": 5.2e-4,
+    "dt": 2.6e-4,
     "acc": 2,
     "it_display": 10
   },
   "simul_configs":
   {
-    "n_iter": 1,
+    "n_iter": 25,
     "show_anim": 0,
     "show_xy": 0,
     "show_xz": 0,
@@ -69,7 +69,8 @@
     "plot_results": 0,
     "plot_sensors": 0,
     "plot_bscan": 0,
-    "save_results": 0,
+    "save_results": 1,
+    "save_field": 0,
     "save_sensors": 0,
     "save_bscan": 0,
     "save_sources": 0,
@@ -79,7 +80,7 @@
   },
   "specimen_params":
   {
-    "cp": 1500.0,
+    "cp": 2000.0,
     "rho": 2000.0
   }
 }

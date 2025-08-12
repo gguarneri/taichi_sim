@@ -27,7 +27,7 @@
         "receiver": "False",
         "freq": 50.0,
         "bw": 0.9,
-        "gain": 1.0e6,
+        "gain": 1.0e5,
         "pulse_type": "gaussian",
         "coord_center": [
           600.0,
