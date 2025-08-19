@@ -17,13 +17,13 @@ import cupyx
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
-class SimulatorCupyRawkernel(Simulator):
+class SimulatorCupyRawkernelUnsplit(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
-        super().__init__(file_config)
+        super().__init__(file_config, sim_model="unsplit")
         
         # Define o nome do simulador
-        self._name = "CuPy-rawkernel"
+        self._name = "CuPy-rawkernel-unsplit"
         
         
     def implementation(self):
@@ -32,13 +32,14 @@ class SimulatorCupyRawkernel(Simulator):
         # ---------------------------------
         # Pressao
         @cupyx.jit.rawkernel()
-        def pressure_kernel(vx, vy, pressure, kappa,
-                            mdvx_dx, mdvy_dy,
-                            a_x_h, b_x_h, k_x_h,
-                            a_y, b_y, k_y,
-                            coefs, idx_fd,
-                            dt, one_dx, one_dy, p_2,
-                            nx, ny, ord):
+        def pressure_first_der_kernel(press_pr, rho_x, rho_y,
+                                      dpx_dx, dpy_dy,
+                                      mdpx_dx, mdpy_dy,
+                                      a_x_h, b_x_h, k_x_h,
+                                      a_y_h, b_y_h, k_y_h,
+                                      coefs, idx_fd,
+                                      one_dx, one_dy, p_2,
+                                      nx, ny, ord):
             x, y = cupyx.jit.grid(2)
             x_i32 = cupy.int32(x)
             y_i32 = cupy.int32(y)
@@ -47,38 +48,41 @@ class SimulatorCupyRawkernel(Simulator):
             offset = ord - 1
             i_dix = -idx_fd[last, 2]
             i_dfx = nx - idx_fd[last, 0]
-            i_diy = -idx_fd[last, 3]
-            i_dfy = ny - idx_fd[last, 1]
+            i_diy = -idx_fd[last, 2]
+            i_dfy = ny - idx_fd[last, 0]
 
-            # Pressure
+            # Calculo das primeiras derivadas (forward) da pressao em relacao a x e y
             p_2[0] = 0.0
             if(x_i32 >= i_dix and x_i32 < i_dfx and y_i32 >= i_diy and y_i32 < i_dfy):
-                vdvx_dx = 0.0
-                vdvy_dy = 0.0
-                for c in range(0, ord):
-                    vdvx_dx += coefs[c] * (vx[x_i32 + idx_fd[c, 0], y] - vx[x_i32 + idx_fd[c, 2], y]) * one_dx
-                    vdvy_dy += coefs[c] * (vy[x, y_i32 + idx_fd[c, 1]] - vy[x, y_i32 + idx_fd[c, 3]]) * one_dy
+                vdpx_dx = 0.0
+                vdpy_dy = 0.0
 
-                mdvx_dx_new = b_x_h[x_i32 - offset] * mdvx_dx[x, y] + a_x_h[x_i32 - offset] * vdvx_dx
-                mdvy_dy_new = b_y[y_i32 - offset] * mdvy_dy[x, y] + a_y[y_i32 - offset] * vdvy_dy
+                for c in range(ord * 2):
+                    off = c - (ord - 1)
+                    vdpx_dx += coefs[c] * press_pr[x_i32 + off, y] * one_dx
+                    vdpy_dy += coefs[c] * press_pr[x, y_i32 + off] * one_dy
 
-                vdvx_dx = vdvx_dx/k_x_h[x_i32 - offset] + mdvx_dx_new
-                vdvy_dy = vdvy_dy/k_y[y_i32 - offset]  + mdvy_dy_new
+                mdpx_dx_new = b_x_h[x_i32 - offset] * mdpx_dx[x, y] + a_x_h[x_i32 - offset] * vdpx_dx
+                mdpy_dy_new = b_y_h[y_i32 - offset] * mdpy_dy[x, y] + a_y_h[y_i32 - offset] * vdpy_dy
 
-                mdvx_dx[x, y] = mdvx_dx_new
-                mdvy_dy[x, y] = mdvy_dy_new
+                vdpx_dx = vdpx_dx/k_x_h[x_i32 - offset] + mdpx_dx_new
+                vdpy_dy = vdpy_dy/k_y_h[y_i32 - offset] + mdpy_dy_new
 
-                pressure[x, y] += kappa[x, y]*(vdvx_dx + vdvy_dy) * dt
+                mdpx_dx[x, y] = mdpx_dx_new
+                mdpy_dy[x, y] = mdpy_dy_new
+                
+                dpx_dx[x, y] = vdpx_dx / rho_x[x, y]
+                dpy_dy[x, y] = vdpy_dy / rho_y[x, y]
         
-        # Velocidades
         @cupyx.jit.rawkernel()
-        def velocity_kernel(vx, vy, pressure, rho_grid_vx, rho_grid_vy,
-                            mdpressure_dx, mdpressure_dy,
-                            a_x, b_x, k_x,
-                            a_y_h, b_y_h, k_y_h,
-                            coefs, idx_fd,
-                            dt, one_dx, one_dy,
-                            nx, ny, ord):
+        def pressure_second_der_kernel(press_past, press_pr, press_ft, kappa,
+                                       dpx_dx, dpy_dy,
+                                       mdpxx_dx, mdpyy_dy,
+                                       a_x, b_x, k_x,
+                                       a_y, b_y, k_y,
+                                       coefs, idx_fd,
+                                       dt, one_dx, one_dy,
+                                       nx, ny, ord):
             x, y = cupyx.jit.grid(2)
             x_i32 = cupy.int32(x)
             y_i32 = cupy.int32(y)
@@ -89,74 +93,67 @@ class SimulatorCupyRawkernel(Simulator):
             i_dfx = nx - idx_fd[last, 1]
             i_diy = -idx_fd[last, 3]
             i_dfy = ny - idx_fd[last, 1]
-            
-            # Velocidade Vx
+
+            # Calculo das segundas derivadas (backward) da pressao em relacao a x e y
             if(x_i32 >= i_dix and x_i32 < i_dfx and y_i32 >= i_diy and y_i32 < i_dfy):
-                dpressure_dx = 0.0
+                vdpxx_dx = 0.0
+                vdpyy_dy = 0.0
 
-                for c in range(0, ord):
-                    dpressure_dx += coefs[c] * (pressure[x_i32 + idx_fd[c, 1], y] - pressure[x_i32 + idx_fd[c, 3], y]) * one_dx
+                for c in range((ord * 2) - 1, -1, -1):
+                    off = (ord - 1) - c
+                    vdpxx_dx += -coefs[c] * dpx_dx[x_i32 + off, y] * one_dx
+                    vdpyy_dy += -coefs[c] * dpy_dy[x, y_i32 + off] * one_dy
 
-                mdpressure_dx_new = b_x[x_i32 - offset] * mdpressure_dx[x, y] + a_x[x_i32 - offset] * dpressure_dx
-                dpressure_dx = dpressure_dx / k_x[x_i32 - offset] + mdpressure_dx_new
-                mdpressure_dx[x, y] = mdpressure_dx_new
+                mdpxx_dx_new = b_x[x_i32 - offset] * mdpxx_dx[x, y] + a_x[x_i32 - offset] * vdpxx_dx
+                mdpyy_dy_new = b_y[y_i32 - offset] * mdpyy_dy[x, y] + a_y[y_i32 - offset] * vdpyy_dy
 
-                vx[x, y] += dt * (dpressure_dx / rho_grid_vx[x, y])
+                vdpxx_dx = vdpxx_dx/k_x[x_i32 - offset] + mdpxx_dx_new
+                vdpyy_dy = vdpyy_dy/k_y[y_i32 - offset] + mdpyy_dy_new
+
+                mdpxx_dx[x, y] = mdpxx_dx_new
+                mdpyy_dy[x, y] = mdpyy_dy_new
             
-            # Velocidade Vy
-            i_dix = -idx_fd[last, 2]
-            i_dfx = nx - idx_fd[last, 0]
-            i_diy = -idx_fd[last, 2]
-            i_dfy = ny - idx_fd[last, 0]
-            
-            if(x_i32 >= i_dix and x_i32 < i_dfx and y_i32 >= i_diy and y_i32 < i_dfy):
-                dpressure_dy = 0.0
-
-                for c in range(0, ord):
-                    dpressure_dy += coefs[c] * (pressure[x, y_i32 + idx_fd[c, 0]] - pressure[x, y_i32 + idx_fd[c, 2]]) * one_dy
-
-                mdpressure_dy_new = b_y_h[y_i32 - offset] * mdpressure_dy[x, y] + a_y_h[y_i32 - offset] * dpressure_dy
-                dpressure_dy = dpressure_dy / k_y_h[y_i32 - offset] + mdpressure_dy_new
-                mdpressure_dy[x, y] = mdpressure_dy_new
-
-                vy[x, y] += dt * (dpressure_dy / rho_grid_vy[x, y])
-               
-        # # Adicao da fonte no campo de pressao
+                # Atualiza o campo de pressao futuro a partir do passado e do presente
+                press_ft[x, y] = 2.0 * press_pr[x, y] - press_past[x, y] + dt**2 * (vdpxx_dx + vdpyy_dy) * kappa[x, y]
+        
+        # Adicao da fonte no campo de pressao
         @cupyx.jit.rawkernel()
         def sources_kernel(pressure, source_term, idx_source, it, dt, one_dx, one_dy):
             x, y = cupyx.jit.grid(2)
 
             idx_src = idx_source[x, y]
             if idx_src != -1:
-                pressure[x, y] += source_term[it - 1, idx_src] * dt * one_dx * one_dy
+                pressure[x, y] += source_term[it - 1, idx_src] * dt**2 * one_dx * one_dy
         
         # Finalizacao da iteracao
         @cupyx.jit.rawkernel()
-        def finish_it_kernel(vx, vy, pressure, idx_fd, p_2, nx, ny, ord):
+        def finish_it_kernel(press_past, press_pr, press_ft, idx_fd, p_2, nx, ny, ord):
             x, y = cupyx.jit.grid(2)
             x_i32 = cupy.int32(x)
             y_i32 = cupy.int32(y)
             
             last = ord - 1
             i_dix = -idx_fd[last, 2]
-            i_dfx = nx - idx_fd[last, 0]
+            i_dfx = nx - idx_fd[last, 1]
             i_diy = -idx_fd[last, 2]
-            i_dfy = ny - idx_fd[last, 0]
+            i_dfy = ny - idx_fd[last, 1]
             p_2_old = p_2[0]
 
             # Aplica as condicoes de Dirichlet
             if(x_i32 < i_dix or x_i32 > i_dfx or y_i32 < i_diy or y_i32 > i_dfy):
-                vx[x, y] = 0.0
-                vy[x, y] = 0.0
+                press_ft[x, y] = 0.0
                 
             # Calcula a norma L2 da pressao
-            p_2_new = cupy.abs(pressure[x, y])
+            p_2_new = cupy.abs(press_ft[x, y])
             p_2[0] = p_2_old if p_2_old > p_2_new else p_2_new
+            
+            # Swap dos valores novos de pressao para valores antigos
+            press_past[x, y] = press_pr[x, y]
+            press_pr[x, y] = press_ft[x, y]
             
         # Armazenamento dos sensores
         @cupyx.jit.rawkernel()
-        def store_sensors_kernel(vx, vy, pressure,
-                                 sens_vx, sens_vy, sens_pressure,
+        def store_sensors_kernel(pressure, sens_pressure,
                                  offset_sensors, info_rec_pt, delay_rec,
                                  it):
             sensor = cupyx.jit.grid(1)
@@ -167,8 +164,6 @@ class SimulatorCupyRawkernel(Simulator):
                 if it >= delay_rec[sensor]:
                     x = info_rec_pt[pt, 0]
                     y = info_rec_pt[pt, 1]
-                    sens_vx[it, sensor] += vx[x, y]
-                    sens_vy[it, sensor] += vy[x, y]
                     sens_pressure[it - 1, sensor] += pressure[x, y]
                 
                 pt += 1
@@ -200,27 +195,28 @@ class SimulatorCupyRawkernel(Simulator):
         coefs_gpu = cupy.asarray(self._coefs)
         
         # Arrays para as variaveis de memoria do calculo
-        memory_dvx_dx_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
-        memory_dvy_dy_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
         memory_dpressure_dx_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
         memory_dpressure_dy_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+        memory_dpressurexx_dx_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+        memory_dpressureyy_dy_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
 
-        # Arrays dos campos de velocidade e pressoes
-        vx_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
-        vy_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
-        pressure_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+        dpressure_dx_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+        dpressure_dy_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+
+        # Arrays dos campos de pressao
+        pressure_past_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+        pressure_present_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+        pressure_future_gpu = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
         pressure_l2_norm_gpu = cupy.asarray(np.zeros(1, dtype=flt32))
         
         # Arrays para os sensores
-        sens_vx_gpu = cupy.asarray(np.zeros((self._n_steps, self._n_rec), dtype=flt32))
-        sens_vy_gpu = cupy.asarray(np.zeros((self._n_steps, self._n_rec), dtype=flt32))
         sens_pressure_gpu = cupy.asarray(np.zeros((self._n_steps, self._n_rec), dtype=flt32))
         offset_sensors_gpu = cupy.asarray(self._offset_sensors)
         info_rec_pt_gpu = cupy.asarray(self._info_rec_pt)
         delay_rec_gpu = cupy.asarray(self._delay_recv)
 
-        # Calculo dos indices para o staggered grid
-        ord = self._coefs.shape[0]
+        # Calculo dos indices para as derivadas
+        ord = self._deriv_acc
         idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(ord)], dtype=int32)
         idx_fd_gpu = cupy.asarray(idx_fd, dtype=cupy.int32)
 
@@ -253,36 +249,37 @@ class SimulatorCupyRawkernel(Simulator):
         # Laco de tempo para execucao da simulacao
         t_gpu = time()
         for it in range(1, self._n_steps + 1):
-            # Calculo da pressao
-            pressure_kernel[grid_fields, block_size](vx_gpu, vy_gpu, pressure_gpu, kappa_gpu,
-                                                     memory_dvx_dx_gpu, memory_dvy_dy_gpu,
-                                                     a_x_half_gpu, b_x_half_gpu, k_x_half_gpu,
-                                                     a_y_gpu, b_y_gpu, k_y_gpu,
-                                                     coefs_gpu, idx_fd_gpu,
-                                                     self._dt, self._one_dx, self._one_dy, pressure_l2_norm_gpu,
-                                                     self._nx, self._ny, ord)
-                  
+            # Calculo das primeiras derivadas de pressao em relacao a x e y
+            pressure_first_der_kernel[grid_fields, block_size](pressure_present_gpu, rho_grid_vx_gpu, rho_grid_vy_gpu,
+                                                               dpressure_dx_gpu, dpressure_dy_gpu,
+                                                               memory_dpressure_dx_gpu, memory_dpressure_dy_gpu,
+                                                               a_x_half_gpu, b_x_half_gpu, k_x_half_gpu,
+                                                               a_y_half_gpu, b_y_half_gpu, k_y_half_gpu,
+                                                               coefs_gpu, idx_fd_gpu,
+                                                               self._one_dx, self._one_dy, pressure_l2_norm_gpu,
+                                                               self._nx, self._ny, ord)
+            
+            # Calculo das segundas derivadas de pressao em relacao a x e y
+            pressure_second_der_kernel[grid_fields, block_size](pressure_past_gpu, pressure_present_gpu, pressure_future_gpu, kappa_gpu,
+                                                                dpressure_dx_gpu, dpressure_dy_gpu,
+                                                                memory_dpressurexx_dx_gpu, memory_dpressureyy_dy_gpu,
+                                                                a_x_gpu, b_x_gpu, k_x_gpu,
+                                                                a_y_gpu, b_y_gpu, k_y_gpu,
+                                                                coefs_gpu, idx_fd_gpu,
+                                                                self._dt, self._one_dx, self._one_dy,
+                                                                self._nx, self._ny, ord)
+            
             # Adicao das fontes no campo de pressao
-            sources_kernel[grid_fields, block_size](pressure_gpu, source_term_gpu, idx_src_gpu,
+            sources_kernel[grid_fields, block_size](pressure_future_gpu, source_term_gpu, idx_src_gpu,
                                                     it, self._dt, self._one_dx, self._one_dy)
-
-            # Calculo das velocidades
-            velocity_kernel[grid_fields, block_size](vx_gpu, vy_gpu, pressure_gpu, rho_grid_vx_gpu, rho_grid_vy_gpu,
-                                                     memory_dpressure_dx_gpu, memory_dpressure_dy_gpu,
-                                                     a_x_gpu, b_x_gpu, k_x_gpu,
-                                                     a_y_half_gpu, b_y_half_gpu, k_y_half_gpu,
-                                                     coefs_gpu, idx_fd_gpu,
-                                                     self._dt, self._one_dx, self._one_dy,
-                                                     self._nx, self._ny, ord)
             
             # Aplica as condicoes de Dirichlet
-            finish_it_kernel[grid_fields, block_size](vx_gpu, vy_gpu, pressure_gpu, idx_fd_gpu,
-                                                      pressure_l2_norm_gpu, self._nx, self._ny, ord)
+            finish_it_kernel[grid_fields, block_size](pressure_past_gpu, pressure_present_gpu, pressure_future_gpu,
+                                                      idx_fd_gpu, pressure_l2_norm_gpu, self._nx, self._ny, ord)
 
             # Armazena os sinais dos sensores
-            store_sensors_kernel[grid_sens, sens_blk_sz](vx_gpu, vy_gpu, pressure_gpu,
-                                   sens_vx_gpu, sens_vy_gpu, sens_pressure_gpu,
-                                   offset_sensors_gpu, info_rec_pt_gpu, delay_rec_gpu, it)
+            store_sensors_kernel[grid_sens, sens_blk_sz](pressure_present_gpu, sens_pressure_gpu,
+                                                         offset_sensors_gpu, info_rec_pt_gpu, delay_rec_gpu, it)
 
             psn2 = pressure_l2_norm_gpu.get()[0]
             if (it % self._it_display) == 0 or it == 5:
@@ -291,7 +288,7 @@ class SimulatorCupyRawkernel(Simulator):
                     print(f'Max pressure = {psn2}')
 
                 if self._show_anim:
-                    self._windows_gpu[0].imv.setImage(pressure_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
+                    self._windows_gpu[0].imv.setImage(pressure_present_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
                     self._app.processEvents()
 
             # Verifica a estabilidade da simulacao
@@ -301,7 +298,7 @@ class SimulatorCupyRawkernel(Simulator):
         sim_time = time() - t_gpu
 
         # Pega os resultados da simulacao
-        pressure = pressure_gpu.get()
+        pressure = pressure_present_gpu.get()
         sens_pressure = sens_pressure_gpu.get()
 
         # --------------------------------------------
@@ -325,7 +322,7 @@ parser.add_argument('-c', '--config', help='Configuration file', default='config
 args = parser.parse_args()
 
 # Cria a instancia do simulador
-sim_instance = SimulatorCupyRawkernel(args.config)
+sim_instance = SimulatorCupyRawkernelUnsplit(args.config)
 
 # Executa simulacao
 try:
