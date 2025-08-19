@@ -85,6 +85,8 @@ class SimulatorTaichiCommon(Simulator):
         self._b = ti.field(float, np.max(Nabc))
         self._b.from_numpy(self._b_x[:Nabc[0][0], 0])
 
+
+
         # Definicao dos limites para a plotagem dos campos
         self._v_max = 10_000.
         self._v_min = - self._v_max
