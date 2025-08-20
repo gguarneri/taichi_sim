@@ -306,7 +306,7 @@ class SimulatorNumba(Simulator):
         #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
         # --------------------------------------------
         return {"pressure": pressure, "sens_pressure": sens_pressure,
-                "gpu_str": cuda.gpus.current.name, "sim_time": sim_time}
+                "gpu_str": cuda.gpus.current.name.decode(), "sim_time": sim_time}
 
 
 # ----------------------------------------------------------
