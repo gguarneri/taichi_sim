@@ -11,17 +11,17 @@ import numpy as np
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-from sim_taichi_common import SimulatorTaichiCommon
+# from sim_taichi_common import SimulatorTaichiCommon
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
 
 @ti.data_oriented
-class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
+class SimulatorTaichiUnsplit(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
-        super().__init__(file_config)
+        super().__init__(file_config, sim_model="unsplit")
 
         # Define o nome do simulador
         self._name = "Taichi Unsplit"
@@ -62,7 +62,9 @@ class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
             psi_p[nd].fill(0.)
             dp[nd].fill(0.)
 
-        dt2Odx2 = self._dt**2 / self._dx**2
+        self._c2 = ti.field(float, self._Nxyz.to_numpy())
+        self._c2.fill(self._cp**2 * self._dt**2 / self._dx**2)
+        self._zero_boundaries(self._c2)
 
         @ti.kernel
         def update_p(nt: int):
@@ -72,7 +74,7 @@ class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
                     D = self._D(dp[nd], xyz, nd, 1, dp[nd].shape[nd])
                     tmp += self._pml(D, psi_dp[nd], xyz, nd)
 
-                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + dt2Odx2 * self._c2[xyz] * tmp
+                p_0[xyz] = 2 * p_1[xyz] - p_2[xyz] + self._c2[xyz] * tmp
 
                 self._addSourceD2p(p_0, xyz, nt)
                 self._readSensors(p_0, xyz, nt)

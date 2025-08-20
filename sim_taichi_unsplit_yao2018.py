@@ -4,8 +4,8 @@
 import argparse
 from time import time
 import numpy as np
-# from sim_support import *
-# from sim_support.simulator import Simulator
+from sim_support import *
+from sim_support.simulator import Simulator
 
 # ======================
 # Importacao de pacotes especificos para a implementacao do simulador
@@ -22,7 +22,7 @@ import math
 class SimulatorTaichiUnsplit(SimulatorTaichiCommon):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
-        super().__init__(file_config)
+        super().__init__(file_config, sim_model="unsplit")
 
         # Define o nome do simulador
         self._name = "Taichi Unsplit Yao 2018"

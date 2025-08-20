@@ -23,20 +23,20 @@ from collections import namedtuple
 
 @ti.data_oriented
 class SimulatorTaichiCommon(Simulator):
-    def __init__(self, file_config):
+    def __init__(self, file_config, sim_model="split"):
         # Chama do construtor padrao, que le o arquivo de configuracao
-        super().__init__(file_config)
+        super().__init__(file_config, sim_model=sim_model)
 
         # Define o nome do simulador
         self._name = "Taichi Common"
 
-        ti.init(arch=ti.gpu, default_fp=ti.f32, default_ip=ti.i32)
+        # ti.init(arch=ti.gpu, default_fp=ti.f32, default_ip=ti.i32)
 
         self._npItp = np.int32
         self._npFtp = np.float32
 
-        try: Nxyz = (self._nx,); Nxyz += (self._ny,); Nxyz += (self._nz,)
-        except AttributeError: pass
+        # try: Nxyz = (self._nx,); Nxyz += (self._ny,); Nxyz += (self._nz,)
+        # except AttributeError: pass
         self._Nd = len(Nxyz)
         self._Nxyz = ti.field(int, self._Nd)
         self._Nxyz.from_numpy(np.array(Nxyz).astype(self._npItp))
@@ -44,32 +44,29 @@ class SimulatorTaichiCommon(Simulator):
         try: self._Dxyz = (self._dx,); self._Dxyz += (self._dy,); self._Dxyz += (self._dz,);
         except AttributeError: pass
 
-        try: self._xyz_s = (self._ix_src,); self._xyz_s += (self._iy_src,); self._xyz_s += (self._iz_src,)
-        except AttributeError: pass
+        # try: self._xyz_s = (self._ix_src,); self._xyz_s += (self._iy_src,); self._xyz_s += (self._iz_src,)
+        # except AttributeError: pass
+        #
+        # try: self._xyz_r = (self._ix_rec,); self._xyz_r += (self._iy_rec,); self._xyz_r += (self._iz_rec,)
+        # except AttributeError: pass
+        #
+        # self._xyz_s = tuple(tuple(i) for i in np.array(self._xyz_s).T)  # Coordinates of sources
+        # self._xyz_r = tuple(tuple(i) for i in np.array(self._xyz_r).T)  # Coordinates of receivers
 
-        try: self._xyz_r = (self._ix_rec,); self._xyz_r += (self._iy_rec,); self._xyz_r += (self._iz_rec,)
-        except AttributeError: pass
-
-        self._xyz_s = tuple(tuple(i) for i in np.array(self._xyz_s).T)  # Coordinates of sources
-        self._xyz_r = tuple(tuple(i) for i in np.array(self._xyz_r).T)  # Coordinates of receivers
-
-        offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
-        self._cd1 = tuple(fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:].astype(self._npFtp))
+        # offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
+        # self._cd1 = tuple(fdcoeffs(deriv=1, offsets=offsets)["coefficients"][self._deriv_acc:].astype(self._npFtp))
         self.offsets = tuple(np.arange(1 - self._deriv_acc, self._deriv_acc))
         self._cd2 = tuple(fdcoeffs(deriv=2, offsets=self.offsets)["coefficients"][round(self._deriv_acc/2):].astype(self._npFtp))
-
-        self._c2 = ti.field(float, self._Nxyz.to_numpy())
-        self._c2.fill(self._cp**2)
-        self._zero_boundaries(self._c2)
 
         if self._source_term.ndim == 1:
             self._source_term = self._source_term[np.newaxis]
         self._source_dp = [ti.field(float, self._n_steps) for _ in range(self._n_src)]
         self._source_d2p = [ti.field(float, self._n_steps) for _ in range(self._n_src)]
         for ns in range(self._n_src):
-            dp = np.diff(self._source_term[ns], prepend=0)
+            # dp = np.diff(self._source_term[ns], prepend=0)
+            dp = self._source_term[ns] * self._dt * self._one_dx * self._one_dy
             self._source_dp[ns].from_numpy(dp.astype(self._npFtp))
-            self._source_d2p[ns].from_numpy(np.diff(dp, prepend=0).astype(self._npFtp))
+            self._source_d2p[ns].from_numpy((dp * self._dt).astype(self._npFtp))
         #self._receiver = [ti.field(float, self._n_steps) for _ in range(self._n_rec)]
         self._receiver = ti.field(float, (self._n_steps, self._n_rec))
 
@@ -85,63 +82,61 @@ class SimulatorTaichiCommon(Simulator):
         self._b = ti.field(float, np.max(Nabc))
         self._b.from_numpy(self._b_x[:Nabc[0][0], 0])
 
-
-
         # Definicao dos limites para a plotagem dos campos
-        self._v_max = 10_000.
+        self._v_max = 100.
         self._v_min = - self._v_max
 
-    @ti.func
-    def _pml(self, D, psi, xyz, nd: int):
-        r = D
-        if xyz[nd] < self._Nabc[nd, 0]:
-            r += psi[xyz]
-            i = xyz[nd]
-            psi[xyz] = self._b[i] * psi[xyz] + (self._b[i] - 1) * D
-        elif xyz[nd] > self._Nxyz[nd] - self._Nabc[nd, 1] - 1:
-            xyz_r = xyz[:]
-            xyz_r[nd] += self._Nabc[nd, 1] - self._Nxyz[nd] + self._Nabc[nd, 0]
-            r += psi[xyz_r]
-            i = self._Nxyz[nd] - xyz[nd] - 1
-            psi[xyz_r] = self._b[i] * psi[xyz_r] + (self._b[i] - 1) * D
-        return r
+    # @ti.func
+    # def _pml(self, D, psi, xyz, nd: int):
+    #     r = D
+    #     if xyz[nd] < self._Nabc[nd, 0]:
+    #         r += psi[xyz]
+    #         i = xyz[nd]
+    #         psi[xyz] = self._b[i] * psi[xyz] + (self._b[i] - 1) * D
+    #     elif xyz[nd] > self._Nxyz[nd] - self._Nabc[nd, 1] - 1:
+    #         xyz_r = xyz[:]
+    #         xyz_r[nd] += self._Nabc[nd, 1] - self._Nxyz[nd] + self._Nabc[nd, 0]
+    #         r += psi[xyz_r]
+    #         i = self._Nxyz[nd] - xyz[nd] - 1
+    #         psi[xyz_r] = self._b[i] * psi[xyz_r] + (self._b[i] - 1) * D
+    #     return r
 
-    @ti.func
-    def _D(self, u: ti.template(), xyz, nd: int, bf: int, imax: int):  # def _D(self, nd, u, xyz, bf):
-        """field, position, dimension, backward or forward"""
-        d = 0.
-        # iimax = u.shape[nd[0]]
-        for nc in ti.static(range(self._deriv_acc)):
-            # # Solution 1
-            # xyz_p = xyz[:]
-            # xyz_n = xyz[:]
-            # xyz_p[nd] += nc + bf
-            # xyz_n[nd] -= nc - bf + 1
-            # a = u[xyz_p] if xyz_p[nd] < imax else 0
-            # b = u[xyz_n] if xyz_n[nd] >= 0 else 0
-            # d += ti.static(self._cd1[nc]) * (a - b)
-
-            # # Solution 2
-            # xyz_tmp = xyz[:]
-            # xyz_tmp[nd] += nc + bf
-            # a = u[xyz_tmp] if xyz_tmp[nd] < imax else 0
-            # xyz_tmp[nd] += - 2 * nc - 1
-            # b = u[xyz_tmp] if xyz_tmp[nd] >= 0 else 0
-            # d += ti.static(self._cd1[nc]) * (a - b)
-
-            # c = u.shape[0]
-            # ti.static_print(nd)
-            # c = c[ti.static(nd)]
-
-            # Solution 3
-            xyz[nd] += nc + bf
-            a = u[xyz] if xyz[nd] < imax else 0
-            xyz[nd] += - 2 * nc - 1
-            b = u[xyz] if xyz[nd] >= 0 else 0
-            xyz[nd] += nc + 1 - bf
-            d += ti.static(self._cd1[nc]) * (a - b)
-
-        return d
+    # @ti.func
+    # def _D(self, u: ti.template(), xyz, nd: int, bf: int, imax: int):  # def _D(self, nd, u, xyz, bf):
+    #     """field, position, dimension, backward or forward"""
+    #     d = 0.
+    #     # iimax = u.shape[nd[0]]
+    #     for nc in ti.static(range(self._deriv_acc)):
+    #         # # Solution 1
+    #         # xyz_p = xyz[:]
+    #         # xyz_n = xyz[:]
+    #         # xyz_p[nd] += nc + bf
+    #         # xyz_n[nd] -= nc - bf + 1
+    #         # a = u[xyz_p] if xyz_p[nd] < imax else 0
+    #         # b = u[xyz_n] if xyz_n[nd] >= 0 else 0
+    #         # d += ti.static(self._cd1[nc]) * (a - b)
+    #
+    #         # # Solution 2
+    #         # xyz_tmp = xyz[:]
+    #         # xyz_tmp[nd] += nc + bf
+    #         # a = u[xyz_tmp] if xyz_tmp[nd] < imax else 0
+    #         # xyz_tmp[nd] += - 2 * nc - 1
+    #         # b = u[xyz_tmp] if xyz_tmp[nd] >= 0 else 0
+    #         # d += ti.static(self._cd1[nc]) * (a - b)
+    #
+    #         # c = u.shape[0]
+    #         # ti.static_print(nd)
+    #         # c = c[ti.static(nd)]
+    #
+    #         # Solution 3
+    #         xyz[nd] += nc + bf
+    #         a = u[xyz] if xyz[nd] < imax else 0
+    #         xyz[nd] += - 2 * nc - 1
+    #         b = u[xyz] if xyz[nd] >= 0 else 0
+    #         xyz[nd] += nc + 1 - bf
+    #         d += ti.static(self._cd1[nc]) * (a - b)
+    #
+    #     return d
 
     @ti.func
     def _lap(self, u, xyz):
@@ -177,11 +172,11 @@ class SimulatorTaichiCommon(Simulator):
             if all(xyz == self._xyz_s[ns]):
                 p[xyz] += self._source_d2p[ns][nt]
 
-    @ti.func
-    def _addSourceDp(self, p, xyz, nt: int):
-        for ns in ti.static(range(self._n_src)):
-            if all(xyz == self._xyz_s[ns]):
-                p[xyz] += self._source_dp[ns][nt]
+    # @ti.func
+    # def _addSourceDp(self, p, xyz, nt: int):
+    #     for ns in ti.static(range(self._n_src)):
+    #         if all(xyz == self._xyz_s[ns]):
+    #             p[xyz] += self._source_dp[ns][nt]
 
     @ti.func
     def _readSensors(self, p, xyz, nt: int):
@@ -214,5 +209,5 @@ if __name__ == '__main__':
     sim = SimulatorTaichiCommon(args.config)
 
     # print(sim._Nabc)
-    plt.imshow(sim._d.to_numpy())
+    # plt.imshow(sim._d.to_numpy())
     # plt.show()
