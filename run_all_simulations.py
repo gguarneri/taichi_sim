@@ -12,19 +12,18 @@ print(files)
 config_file_path = os.path.join('.', 'ensaios', 'ponto', 'ponto_sem_plots.json')
 
 for file in files:
-    if file.find("cpu") == -1:
-        print("Running: ", file)
-        resultado = subprocess.run(
-            [
-                sys.executable,
-                file,
-                "-c",
-                config_file_path
-            ],
-            capture_output=True,
-            text=True,
-            env=env
-        )
+    print("Running: ", file)
+    resultado = subprocess.run(
+        [
+            sys.executable,
+            file,
+            "-c",
+            config_file_path
+        ],
+        capture_output=True,
+        text=True,
+        env=env
+    )
 
-        print("STDOUT:\n", resultado.stdout)
-        print("STDERR:\n", resultado.stderr)
+    print("STDOUT:\n", resultado.stdout)
+    print("STDERR:\n", resultado.stderr)
