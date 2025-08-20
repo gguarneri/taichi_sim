@@ -1,9 +1,11 @@
 import glob
 import re
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-arquivos_txt = glob.glob(r".\ensaios\ponto\results\result_*__desc.txt")
+arquivos_txt_path = os.path.join(".", "ensaios", "ponto", "results", "result_*__desc.txt")
+arquivos_txt = glob.glob(arquivos_txt_path)
 
 
 def extrair_dados(arquivo):
