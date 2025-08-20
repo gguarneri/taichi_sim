@@ -181,6 +181,10 @@ class SimulatorCupyConvUnsplit(Simulator):
 
         # Pega os resultados da simulacao
         pressure = pressure_future_gpu.get()
+        
+        # Libera a memoria alocada na GPU
+        cupy.get_default_memory_pool().free_all_blocks()
+        cupy.get_default_pinned_memory_pool().free_all_blocks()
 
         # --------------------------------------------
         # A funcao de implementacao do simulador deve retornar
