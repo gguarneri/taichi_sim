@@ -79,12 +79,19 @@ class SimulatorTaichiStaggered(Simulator):
             psi_p.append(ti.field(float, Npml))
             psi_v.append(ti.field(float, Npml))
 
-        b = ti.field(float, np.max(_Nabc))
-        b.from_numpy(self._b_x_half[:_Nabc[0][0], 0])
-        a = ti.field(float, np.max(_Nabc))
-        a.from_numpy(self._a_x_half[:_Nabc[0][0], 0])
-        k = ti.field(float, np.max(_Nabc))
-        k.from_numpy(self._k_x_half[:_Nabc[0][0], 0])
+        bf = ti.field(float, np.max(_Nabc))
+        bf.from_numpy(self._b_x[:_Nabc[0][0], 0])
+        af = ti.field(float, np.max(_Nabc))
+        af.from_numpy(self._a_x[:_Nabc[0][0], 0])
+        kf = ti.field(float, np.max(_Nabc))
+        kf.from_numpy(self._k_x[:_Nabc[0][0], 0])
+
+        bh = ti.field(float, np.max(_Nabc))
+        bh.from_numpy(self._b_x_half[:_Nabc[0][0], 0])
+        ah = ti.field(float, np.max(_Nabc))
+        ah.from_numpy(self._a_x_half[:_Nabc[0][0], 0])
+        kh = ti.field(float, np.max(_Nabc))
+        kh.from_numpy(self._k_x_half[:_Nabc[0][0], 0])
 
 
         # Filling fields with zeros
@@ -112,7 +119,7 @@ class SimulatorTaichiStaggered(Simulator):
         zero_boundaries(rho_inv)
 
         @ti.func
-        def D(u: ti.template(), xyz, nd: int, bf: int, imax: int):  # def _D(self, nd, u, xyz, bf):
+        def D(u: ti.template(), xyz, nd: int, bf: int):
             """field, position, dimension, backward or forward"""
             d = 0.
             # iimax = u.shape[nd[0]]
@@ -140,27 +147,27 @@ class SimulatorTaichiStaggered(Simulator):
 
                 # Solution 3
                 xyz[nd] += nc + bf
-                a = u[xyz] if xyz[nd] < imax else 0
+                a = u[xyz] # if xyz[nd] < imax else 0
                 xyz[nd] += - 2 * nc - 1
-                b = u[xyz] if xyz[nd] >= 0 else 0
+                b = u[xyz] # if xyz[nd] >= 0 else 0
                 xyz[nd] += nc + 1 - bf
                 d += ti.static(self._coefs[nc]) * (a - b)
 
             return d
 
         @ti.func
-        def pml(d, psi, xyz, nd: int):
+        def pml(d, psi, xyz, nd: int, al, bl, kl, ar, br, kr):
             r = d
             if xyz[nd] < Nabc[nd, 0]:
                 i = xyz[nd]
-                r = r / k[i] + psi[xyz]
-                psi[xyz] = b[i] * psi[xyz] + a[i] * d
+                r = r / kl[i] + psi[xyz]
+                psi[xyz] = bl[i] * psi[xyz] + al[i] * d
             elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
                 xyz_r = xyz[:]
                 xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
                 i = Nxyz[nd] - xyz[nd] - 1
-                r = r / k[i] + psi[xyz_r]
-                psi[xyz_r] = b[i] * psi[xyz_r] + a[i] * d
+                r = r / kr[i] + psi[xyz_r]
+                psi[xyz_r] = br[i] * psi[xyz_r] + ar[i] * d
             return r
 
         @ti.func
@@ -180,7 +187,7 @@ class SimulatorTaichiStaggered(Simulator):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
                     d = D(v[nd], xyz, nd, 1, v[nd].shape[nd])
-                    p[xyz] -= K[xyz] * pml(d, psi_v[nd], xyz, nd)
+                    p[xyz] -= K[xyz] * pml(d, psi_v[nd], xyz, nd, ah, bh, kh, af, bf, kf)
 
                 add_source(p, xyz, nt)
                 read_sensors(p, xyz, nt)
@@ -190,7 +197,7 @@ class SimulatorTaichiStaggered(Simulator):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
                     d = D(p, xyz, nd, 0, p.shape[nd])
-                    v[nd][xyz] -= rho_inv[xyz] * pml(d, psi_p[nd], xyz, nd)
+                    v[nd][xyz] -= rho_inv[xyz] * pml(d, psi_p[nd], xyz, nd, af, bf, kf, ah, bh, kh)
                     # Dirichlet
                     if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
                         v[nd][xyz] = 0.
