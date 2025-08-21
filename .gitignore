@@ -6,6 +6,9 @@
 !.vscode/*.code-snippets
 !*.code-workspace
 
+# Inclusoes do projeto
+ensaios/ponto/local_results/*
+
 # Built Visual Studio Code Extensions
 *.vsix
 
