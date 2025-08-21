@@ -11,7 +11,7 @@ from sim_support.simulator import Simulator
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-from findiff import coefficients as fdcoeffs
+# from findiff import coefficients as fdcoeffs
 # from sim_taichi_common import SimulatorTaichiCommon
 
 # -----------------------------------------------------------------------------
@@ -75,15 +75,16 @@ class SimulatorTaichiStaggered(Simulator):
         psi_v = []
         for nd in range(Nd):
             Npml = list(_Nxyz)
-            #Npml[nd] = Nabc[nd, 0] + Nabc[nd, 1]
             Npml[nd] = _Nabc[nd][0] + _Nabc[nd][1]
             psi_p.append(ti.field(float, Npml))
             psi_v.append(ti.field(float, Npml))
 
         b = ti.field(float, np.max(_Nabc))
-        b.from_numpy(self._b_x[:_Nabc[0][0], 0])
+        b.from_numpy(self._b_x_half[:_Nabc[0][0], 0])
         a = ti.field(float, np.max(_Nabc))
-        a.from_numpy(self._a_x[:_Nabc[0][0], 0])
+        a.from_numpy(self._a_x_half[:_Nabc[0][0], 0])
+        k = ti.field(float, np.max(_Nabc))
+        k.from_numpy(self._k_x_half[:_Nabc[0][0], 0])
 
 
         # Filling fields with zeros
@@ -98,7 +99,7 @@ class SimulatorTaichiStaggered(Simulator):
             for xyz in ti.grouped(prmtr):
                 cond = False
                 for nd in ti.static(range(Nd)):
-                    cond = cond or xyz[nd] < self._deriv_acc or xyz[nd] >= Nxyz[nd] - self._deriv_acc
+                    cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
                 if cond:
                     prmtr[xyz] = 0.
 
@@ -148,28 +149,28 @@ class SimulatorTaichiStaggered(Simulator):
             return d
 
         @ti.func
-        def pml(D, psi, xyz, nd: int):
-            r = D
+        def pml(d, psi, xyz, nd: int):
+            r = d
             if xyz[nd] < Nabc[nd, 0]:
-                r += psi[xyz]
                 i = xyz[nd]
-                psi[xyz] = b[i] * psi[xyz] + a[i] * D
+                r = r / k[i] + psi[xyz]
+                psi[xyz] = b[i] * psi[xyz] + a[i] * d
             elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
                 xyz_r = xyz[:]
                 xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
-                r += psi[xyz_r]
                 i = Nxyz[nd] - xyz[nd] - 1
-                psi[xyz_r] = b[i] * psi[xyz_r] + a[i] * D
+                r = r / k[i] + psi[xyz_r]
+                psi[xyz_r] = b[i] * psi[xyz_r] + a[i] * d
             return r
 
         @ti.func
-        def addSource(p, xyz, nt: int):
+        def add_source(p, xyz, nt: int):
             for ns in ti.static(range(self._n_src)):
                 if all(xyz == xyz_s[ns]):
                     p[xyz] += source[ns][nt]
 
         @ti.func
-        def readSensors(p, xyz, nt: int):
+        def read_sensors(p, xyz, nt: int):
             for nr in ti.static(range(self._n_rec)):
                 if all(xyz == xyz_r[nr]):
                     receiver[nt, nr] = p[xyz]
@@ -181,18 +182,21 @@ class SimulatorTaichiStaggered(Simulator):
                     d = D(v[nd], xyz, nd, 1, v[nd].shape[nd])
                     p[xyz] -= K[xyz] * pml(d, psi_v[nd], xyz, nd)
 
-                addSource(p, xyz, nt)
-                readSensors(p, xyz, nt)
+                add_source(p, xyz, nt)
+                read_sensors(p, xyz, nt)
 
         @ti.kernel
         def update_v():
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
-                    d = D(p, xyz, nd,0, p.shape[nd])
+                    d = D(p, xyz, nd, 0, p.shape[nd])
                     v[nd][xyz] -= rho_inv[xyz] * pml(d, psi_p[nd], xyz, nd)
+                    # Dirichlet
+                    if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
+                        v[nd][xyz] = 0.
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.
+        v_max = 10.
         v_min = - v_max
         def show_anim_func(nt: int, u):
             if not nt % self._it_display:
