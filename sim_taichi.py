@@ -119,7 +119,7 @@ class SimulatorTaichiStaggered(Simulator):
         zero_boundaries(rho_inv)
 
         @ti.func
-        def D(u: ti.template(), xyz, nd: int, bf: int):
+        def D(u, xyz, nd: int, bf: int):
             """field, position, dimension, backward or forward"""
             d = 0.
             # iimax = u.shape[nd[0]]
@@ -186,7 +186,8 @@ class SimulatorTaichiStaggered(Simulator):
         def update_p(nt: int):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
-                    d = D(v[nd], xyz, nd, 1, v[nd].shape[nd])
+                    d = D(v[nd], xyz, nd, 1)
+                    # def D(u, xyz, nd: int, bf: int):
                     p[xyz] -= K[xyz] * pml(d, psi_v[nd], xyz, nd, ah, bh, kh, af, bf, kf)
 
                 add_source(p, xyz, nt)
@@ -196,7 +197,7 @@ class SimulatorTaichiStaggered(Simulator):
         def update_v():
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
-                    d = D(p, xyz, nd, 0, p.shape[nd])
+                    d = D(p, xyz, nd, 0)
                     v[nd][xyz] -= rho_inv[xyz] * pml(d, psi_p[nd], xyz, nd, af, bf, kf, ah, bh, kh)
                     # Dirichlet
                     if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
