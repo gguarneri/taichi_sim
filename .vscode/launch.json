@@ -134,5 +134,13 @@
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
+        {
+            "name": "Ponto Taichi-split",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
     ]
 }
