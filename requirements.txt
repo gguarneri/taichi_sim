@@ -1,27 +1,52 @@
+# requirements.txt
+
 cffi==1.17.1
-contourpy==1.3.2
-cuda-bindings==12.9.0
-cuda-core==0.3.1
-cuda-python==12.9.0
-cupy==13.3.0
+colorama==0.4.6
+contourpy==1.3.3
+cuda-bindings==13.0.1; sys_platform != "darwin"
+cuda-core==0.3.2; sys_platform != "darwin"
+cuda-pathfinder==1.1.0; sys_platform != "darwin"
+cupy-cuda12x==13.6.0; sys_platform != "darwin"
 cycler==0.12.1
+dill==0.4.0
 fastrlock==0.8.3
-fonttools==4.58.4
+filelock==3.19.1
+findiff==0.12.1
+fonttools==4.59.1
+fsspec==2025.7.0
+Jinja2==3.1.6
 joblib==1.5.1
-kiwisolver==1.4.8
+json5==0.12.1
+kiwisolver==1.4.9
 llvmlite==0.44.0
-matplotlib==3.10.3
+markdown-it-py==4.0.0
+MarkupSafe==3.0.2
+matplotlib==3.10.5
+mdurl==0.1.2
+mpmath==1.3.0
+networkx==3.5
 numba==0.61.2
-numba-cuda==0.16.0
+numba-cuda==0.19.0; sys_platform != "darwin"
 numpy==2.2.6
-nvidia-cuda-nvcc-cu12==12.9.86
-nvidia-cuda-nvrtc-cu12==12.9.86
-nvidia-cuda-runtime-cu12==12.9.79
-nvidia-nvjitlink-cu12==12.9.86
+nvidia-cublas-cu12==12.8.4.1; sys_platform != "darwin"
+nvidia-cuda-cupti-cu12==12.8.90; sys_platform != "darwin"
+nvidia-cuda-nvrtc-cu12==12.8.93; sys_platform != "darwin"
+nvidia-cuda-runtime-cu12==12.8.90; sys_platform != "darwin"
+nvidia-cudnn-cu12==9.10.2.21; sys_platform != "darwin"
+nvidia-cufft-cu12==11.3.3.83; sys_platform != "darwin"
+nvidia-cufile-cu12==1.13.1.3; sys_platform != "darwin"
+nvidia-curand-cu12==10.3.9.90; sys_platform != "darwin"
+nvidia-cusolver-cu12==11.7.3.90; sys_platform != "darwin"
+nvidia-cusparse-cu12==12.5.8.93; sys_platform != "darwin"
+nvidia-cusparselt-cu12==0.7.1; sys_platform != "darwin"
+nvidia-nccl-cu12==2.27.3; sys_platform != "darwin"
+nvidia-nvjitlink-cu12==12.8.93; sys_platform != "darwin"
+nvidia-nvtx-cu12==12.8.90; sys_platform != "darwin"
 packaging==25.0
-pandas==2.3.0
+pandas==2.3.1
 pillow==11.3.0
 pycparser==2.22
+Pygments==2.19.2
 pyparsing==3.2.3
 PyQt6==6.9.1
 PyQt6-Qt6==6.9.1
@@ -29,11 +54,16 @@ PyQt6_sip==13.10.2
 pyqtgraph==0.13.7
 python-dateutil==2.9.0.post0
 pytz==2025.2
-scikit-learn==1.7.0
-scipy==1.15.3
+rich==14.1.0
+scikit-learn==1.7.1
+scipy==1.16.1
 setuptools==80.9.0
 six==1.17.0
 sniffio==1.3.1
+sympy==1.14.0
 threadpoolctl==3.6.0
+torch==2.8.0
+triton==3.4.0
+typing_extensions==4.14.1
 tzdata==2025.2
-wgpu==0.22.2
+wgpu==0.23.0

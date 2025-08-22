@@ -9,6 +9,8 @@ env["PYTHONPATH"] = os.pathsep.join(sys.path)
 files = glob.glob("sim_*.py")
 print(files)
 
+config_file_path = os.path.join('.', 'ensaios', 'ponto', 'ponto_sem_plots.json')
+
 for file in files:
     print("Running: ", file)
     resultado = subprocess.run(
@@ -16,7 +18,7 @@ for file in files:
             sys.executable,
             file,
             "-c",
-            r".\ensaios\ponto\ponto_sem_plots.json"
+            config_file_path
         ],
         capture_output=True,
         text=True,

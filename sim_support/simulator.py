@@ -24,7 +24,7 @@ class Simulator:
         # -----------------------
         # Leitura da configuracao no formato JSON
         # -----------------------
-        with open(file_config, 'r') as f:
+        with open(os.path.normpath(file_config), 'r') as f:
             self._configs = ast.literal_eval(f.read())
         
         # Configuracao da simulacao
@@ -53,15 +53,15 @@ class Simulator:
         # Configuracao do corpo de prova
         self._cp = flt32(self._configs.get("specimen_params", 5.9).get("cp", 5.9))  # [mm/us]
         if "cp_map" in self._configs["specimen_params"]:
-            self._cp_map = np.load(self._configs["specimen_params"]["cp_map"]).astype(flt32)
+            self._cp_map = np.load(os.path.normpath(self._configs["specimen_params"]["cp_map"])).astype(flt32)
         
         self._cs = flt32(self._configs.get("specimen_params", 3.23).get("cs", 3.23))  # [mm/us]
         if "cs_map" in self._configs["specimen_params"]:
-            self._cs_map = np.load(self._configs["specimen_params"]["cs_map"]).astype(flt32)
+            self._cs_map = np.load(os.path.normpath(self._configs["specimen_params"]["cs_map"])).astype(flt32)
 
         self._rho = flt32(self._configs.get("specimen_params", 7800.0).get("rho", 7800.0))  # [mm/us]
         if "rho_map" in self._configs["specimen_params"]:
-            self._rho_map = np.load(self._configs["specimen_params"]["rho_map"]).astype(flt32)
+            self._rho_map = np.load(os.path.normpath(self._configs["specimen_params"]["rho_map"])).astype(flt32)
 
         # Configuracao da ROI
         pad = self._deriv_acc - 1
@@ -202,10 +202,12 @@ class Simulator:
         self._save_bscan = bool(self._configs.get("simul_configs", False).get("save_bscan", False))
         self._save_sources = bool(self._configs.get("simul_configs", False).get("save_sources", False))
         self._source_env = bool(self._configs.get("simul_configs", False).get("source_env", False))
-        if "emission_laws" in self._configs["simul_configs"] and os.path.isfile(self._configs["simul_configs"]["emission_laws"]):
-            self._emission_laws, _ = EmissionLaw.read_law(self._configs["simul_configs"]["emission_laws"])
-        if "results_dir" in self._configs["simul_configs"] and os.path.isdir(self._configs["simul_configs"]["results_dir"]):
-            self._results_dir = self._configs["simul_configs"]["results_dir"]
+        if ("emission_laws" in self._configs["simul_configs"] and
+            os.path.isfile(os.path.normpath(self._configs["simul_configs"]["emission_laws"]))):
+            self._emission_laws, _ = EmissionLaw.read_law(os.path.normpath(self._configs["simul_configs"]["emission_laws"]))
+        if ("results_dir" in self._configs["simul_configs"] and
+            os.path.isdir(os.path.normpath(self._configs["simul_configs"]["results_dir"]))):
+            self._results_dir = os.path.normpath(self._configs["simul_configs"]["results_dir"])
             
         # Obtem fontes e receptores dos transdutores
         source_term = list()
@@ -296,15 +298,14 @@ class Simulator:
                 # Imprime algumas informacoes e cria o nome base dos arquivos de resultados
                 print(results_dict["gpu_str"])
                 print(f'{sim_times[-1]:.3}s')
-                result_dir = self._results_dir if hasattr(self, "_results_dir") else "."
-                name = (f'{result_dir}/result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
+                result_dir = self._results_dir if hasattr(self, "_results_dir") else os.path.join(".")
+                name = os.path.join(result_dir, f'result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_law_{law}')
                 
                 # Compara o resultado com a referencia (CPU-broadcast)
                 try:
                     # Compara o resultado do campo de pressao com o valor de referência
-                    pressure_ref = np.load(result_dir +
-                                           f"/result_ref_{self._sim_model}_field_pressure.npy")[
+                    pressure_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_field_pressure.npy"))[
                                                self._roi.get_ix_min():self._roi.get_ix_max(),
                                                self._roi.get_iz_min():self._roi.get_iz_max()]
                     
@@ -316,7 +317,7 @@ class Simulator:
                         mse_pressure = np.inf
 
                     # Compara o resultado dos sensores de pressao com o valores de referência
-                    sens_pressure_ref = np.load(result_dir + f"/result_ref_{self._sim_model}_bscan_pressure.npy")
+                    sens_pressure_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_bscan_pressure.npy"))
                     sens_pressure = results_dict["sens_pressure"]
                     if sens_pressure_ref.shape == sens_pressure.shape:
                         mse_sens_pressure = np.mean((sens_pressure_ref - sens_pressure) ** 2)
@@ -331,7 +332,7 @@ class Simulator:
                     print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
 
                 # Plota o mapa de pressao
-                bscan_ref = np.load('ensaios/ponto/results/result_ref_unsplit_bscan_pressure.npy')
+                bscan_ref = np.load(os.path.join('ensaios', 'ponto', 'results', 'result_ref_unsplit_bscan_pressure.npy'))
                 if self._plot_results:
                     pressure_sim_result = plt.figure()
                     plt.title(f'{self._name} simulation pressure - law ({law})\n({self._nx}x{self._ny})')
@@ -378,7 +379,9 @@ class Simulator:
                         rd = np.sqrt(np.sum((coord_emitter - coord_receiver)**2))
                         td = rd / self._cp + t0_emission
                         ntd = td / self._dt
-                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]), np.max(results_dict["sens_pressure"][:, r])], label="Posição esperada eco")
+                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]),
+                                              np.max(results_dict["sens_pressure"][:, r])],
+                                 label="Posição esperada eco")
                         
                         # Salva a imagem do sensor
                         if self._save_sensors:
@@ -416,11 +419,11 @@ class Simulator:
             print(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4} (std = {mse_values[5:, 1].std():.4})')
 
         if self._save_sources:
-            name = f'{result_dir}/sources_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}'
+            name = os.path.join(result_dir, f'sources_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}')
             np.save(name, self._source_term)
         
         if self._save_results:
-            name = (f'{result_dir}/result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
+            name = os.path.join(result_dir, f'result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_')
             np.savetxt(name + 'GPU_.csv', sim_times, '%10.3f', delimiter=',')
 

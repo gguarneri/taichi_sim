@@ -118,5 +118,21 @@
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
+        {
+            "name": "Ponto Pytorch-conv-split",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_pytorch_conv_split.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto Pytorch-conv-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_pytorch_conv_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
     ]
 }
