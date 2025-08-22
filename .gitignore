@@ -219,3 +219,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# simulators analisys tests
+analise_completa
+ensaios
+images
+nsys_data
+smi_data
