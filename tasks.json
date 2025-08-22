@@ -1,0 +1,55 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+    {
+      "label": "Libera debug do kernel CUDA",
+      "type": "shell",
+      "command": "echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope"
+    },
+    {
+      "label": "Profiler acoustic_2d_convolve_gpu",
+      "type": "shell",
+      "command": "nsys",
+      "args": [
+        "profile",
+        "-t",
+        "cuda,osrt,nvtx",
+        "--gpu-metrics-device=all",
+        "-o",
+        "${workspaceFolder}/prof_results/acoustic_2d_convolve_GPU_${input:DateTime}.nsys-rep",
+        "python3",
+        "acoustic_2d_pressure_velocity_cpml.py",
+        "--config",
+        "acoustic_cpml_convolve_gpu.json",
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Profiler acoustic_2d_broadcast_gpu",
+      "type": "shell",
+      "command": "nsys",
+      "args": [
+        "profile",
+        "-t",
+        "cuda,osrt,nvtx",
+        "--gpu-metrics-device=all",
+        "-o",
+        "${workspaceFolder}/prof_results/acoustic_2d_broadcast_GPU_${input:DateTime}.nsys-rep",
+        "python3",
+        "acoustic_2d_pressure_velocity_cpml.py",
+        "--config",
+        "acoustic_cpml_broadcast_gpu.json",
+      ],
+      "problemMatcher": []
+    },
+  ],
+  "inputs": [
+    {
+      "id": "DateTime",
+      "type": "promptString",
+      "description": "Entre data e hora do ensaio",
+      "default": "YYYY-MM-DD_HH:MM:SS"
+      // type specific configuration attributes
+    }
+  ]
+}
