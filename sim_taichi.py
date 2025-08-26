@@ -268,10 +268,7 @@ class SimulatorTaichiStaggered(Simulator):
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-# parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
-default_config_file = "ensaios/ponto/ponto.json"
-parser.add_argument('-c', '--config', help='Configuration file', default=default_config_file)
-
+parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
 args = parser.parse_args()
 
 # Cria a instancia do simulador
