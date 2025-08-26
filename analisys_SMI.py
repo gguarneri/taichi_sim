@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import re
+import sys
 
 
 def listar_scripts(pattern):
@@ -27,8 +28,8 @@ def monitorar_gpu(log_file, sample_interval_ms):
     return proc, logf
 
 
-def executar_simulacao(script, config_file, python_exec):
-    subprocess.run([python_exec, script, "-c", config_file], check=True)
+def executar_simulacao(script, config_file, env):
+    subprocess.run(["python", script, "-c", config_file], check=True, env=env)
 
 
 def encerrar_monitoramento(proc, logf):
@@ -155,7 +156,7 @@ def analisar_e_plotar_resultados(arquivos_txt, output_dir):
     axs[0].bar(
         df["simulador"],
         df["tempo_medio"],
-        yerr=[df["tempo_medio"] - df["tempo_min"], df["tempo_max"] - df["tempo_medio"]],
+        yerr=df["tempo_std"],
         capsize=5,
         color="skyblue",
     )
@@ -163,11 +164,10 @@ def analisar_e_plotar_resultados(arquivos_txt, output_dir):
     axs[0].set_ylabel("Tempo (segundos)")
     axs[0].tick_params(axis="x", rotation=45)
 
-    # Campo
     axs[1].bar(
         df["simulador"],
         df["mse_campo"],
-        yerr=[df["mse_campo"] - df["mse_campo_min"], df["mse_campo_max"] - df["mse_campo"]],
+        yerr=df["mse_campo_std"],
         capsize=5,
         color="lightgreen",
     )
@@ -179,7 +179,7 @@ def analisar_e_plotar_resultados(arquivos_txt, output_dir):
     axs[2].bar(
         df["simulador"],
         df["mse_sensores"],
-        yerr=[df["mse_sensores"] - df["mse_sensores_min"], df["mse_sensores_max"] - df["mse_sensores"]],
+        yerr=df["mse_sensores_std"],
         capsize=5,
         color="salmon",
     )
@@ -197,25 +197,37 @@ def analisar_e_plotar_resultados(arquivos_txt, output_dir):
 if __name__ == "__main__":
     OUTPUT_DIR = "analise_completa"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    PYTHON_EXEC = r"C:\Users\Victor\miniconda3\envs\python310\python.exe"
-    CONFIG_FILE = r".\ensaios\ponto\ponto_sem_plots.json"
-    SCRIPTS_PATTERN = "sim_*.py"
-    RESULT_FILES_PATTERN = r".\ensaios\ponto\results\result_*__desc.txt"
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(sys.path)
+
+    CONFIG_FILE = os.path.join(".", "ensaios", "ponto", "ponto_sem_plots.json")
+    SCRIPTS_PATTERN = "sim_cupy_rawkernel_unsplit.py"
+    RESULT_FILES_PATTERN = os.path.join(
+        ".", "ensaios", "ponto", "results", "result_*__desc.txt"
+    )
     SAMPLE_INTERVAL_MS = 200
+
     scripts = listar_scripts(SCRIPTS_PATTERN)
     box_data_mem, box_data_gpu, labels_list = [], [], []
+
     for script in scripts:
         base_name = os.path.splitext(os.path.basename(script))[0]
         log_file = os.path.join(OUTPUT_DIR, f"{base_name}_memoria.csv")
         output_img = os.path.join(OUTPUT_DIR, f"{base_name}_uso_memoria_gpu.png")
         nvidia_proc, logf = monitorar_gpu(log_file, SAMPLE_INTERVAL_MS)
-        executar_simulacao(script, CONFIG_FILE, PYTHON_EXEC)
+
+        executar_simulacao(script, CONFIG_FILE, env)
         encerrar_monitoramento(nvidia_proc, logf)
+
         df_gpu = processar_log_gpu(log_file, SAMPLE_INTERVAL_MS)
+
         plot_gpu_memoria(df_gpu, output_img, f"Uso de GPU - {base_name}")
+
         box_data_mem.append(df_gpu["mem_used_GB"])
         box_data_gpu.append(df_gpu["gpu_util"])
         labels_list.append(base_name)
+
     if box_data_mem and box_data_gpu:
         plot_mean_std(
             box_data_mem,

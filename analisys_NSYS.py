@@ -1,49 +1,79 @@
-import json
 import matplotlib.pyplot as plt
+import pandas as pd
 import glob
 import os
+import subprocess
+import re
 
-json_dir = "nsys_data"
-json_files = glob.glob(os.path.join(json_dir, "*_json.json"))
+data = "nsys_data"
+files = glob.glob(os.path.join(data, "perfil_sim_*.nsys-rep"))
 
-images_dir = "images"
-os.makedirs(images_dir, exist_ok=True)
+all_data = []
 
-for json_file in json_files:
-    times = []
-    mem_transfer_MB = []
+for file in files:
+    print(f"Analising {file}")
+    profile_cmd = [
+        "nsys",
+        "stats",
+        file,
+        "--report",
+        "cuda_gpu_mem_size_sum",
+        "--force-export=true"
+    ]
 
-    with open(json_file) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            ev = json.loads(line)
-            if 'CudaEvent' in ev:
-                ce = ev['CudaEvent']
+    resultado = subprocess.run(
+        profile_cmd,
+        capture_output=True,
+        text=True,
+        encoding="latin-1",
+        errors="replace"
+    )
 
-                if 'memcpy' in ce:
-                    size = int(ce['memcpy']['sizebytes'])
-                    t_start = int(ce['startNs'])
-                    t_end = int(ce['endNs'])
+    lines = resultado.stdout.splitlines()
 
-                    times.append(t_start / 1e6)
-                    mem_transfer_MB.append(0)
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip().startswith("Total (MB)"):
+            start = i
+            break
+    if start is None:
+        print("Tabela não encontrada no output!")
+        continue
 
-                    times.append(t_start / 1e6)
-                    mem_transfer_MB.append(size / 1e6)
+    header = [
+        "Total (MB)",
+        "Count",
+        "Avg (MB)",
+        "Med (MB)",
+        "Min (MB)",
+        "Max (MB)",
+        "StdDev (MB)",
+        "Operation"
+    ]
 
-                    times.append(t_end / 1e6)
-                    mem_transfer_MB.append(size / 1e6)
+    data_lines = []
+    for line in lines[start+2:]:
+        if not line.strip():
+            break
+        parts = re.split(r"\s{2,}", line.strip())
+        if len(parts) == 8:
+            parts.append(os.path.basename(file))
+            data_lines.append(parts)
 
-                    times.append(t_end / 1e6)
-                    mem_transfer_MB.append(0)
+    df = pd.DataFrame(data_lines, columns=header + ["Profile"])
 
-    plt.figure(figsize=(10,5))
-    plt.plot(times, mem_transfer_MB, marker='o', linestyle='-')
-    plt.xlabel("Tempo (ms)")
-    plt.ylabel("Transferência de Memória (MB)")
-    plt.title(f"memcpy - {os.path.basename(json_file)}")
-    plt.grid(True)
+    for col in header[:-1]:
+        df[col] = df[col].str.replace(",", ".").astype(float)
 
-plt.show()
+    all_data.append(df)
+
+big_df = pd.concat(all_data, ignore_index=True)
+
+for operation, df_op in big_df.groupby("Operation"):
+    plt.figure(figsize=(8, 5))
+    plt.bar(df_op["Profile"], df_op["Total (MB)"])
+    plt.ylabel("Total (MB)")
+    plt.title(f"GPU MemOps Summary - {operation}")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
