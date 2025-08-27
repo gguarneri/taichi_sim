@@ -11,6 +11,7 @@ from sim_support.simulator import Simulator
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
+import matplotlib.pyplot as plt
 # from findiff import coefficients as fdcoeffs
 # from sim_taichi_common import SimulatorTaichiCommon
 
@@ -44,6 +45,7 @@ class SimulatorTaichiStaggered(Simulator):
         # Pressure and velocity fields
         p = ti.field(float, _Nxyz)
         v = [ti.field(float, _Nxyz) for _ in range(Nd)]
+
 
         # Coordinates of sources
         try: xyz_s = (self._ix_src,); xyz_s += (self._iy_src,); xyz_s += (self._iz_src,)
@@ -108,27 +110,31 @@ class SimulatorTaichiStaggered(Simulator):
             psi_p[nd].fill(0.)
             psi_v[nd].fill(0.)
 
-        # @ti.kernel
-        # def zero_boundaries(prmtr: ti.template()):
-        #     for xyz in ti.grouped(prmtr):
-        #         cond = False
-        #         for nd in ti.static(range(Nd)):
-        #             cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
-        #         if cond:
-        #             prmtr[xyz] = 0.
+        @ti.kernel
+        def zero_boundaries(prmtr: ti.template()):
+            for xyz in ti.grouped(prmtr):
+                cond = False
+                for nd in ti.static(range(Nd)):
+                    cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
+                if cond:
+                    prmtr[xyz] = 0.
 
         # Bulk modulus in taichi field
         K = ti.field(float, _Nxyz)
-        K.fill(self._cp**2 * self._rho * self._dt / self._dx)
-        # zero_boundaries(K)
+        # K.fill(self._cp**2 * self._rho * self._dt / self._dx)
+        K.from_numpy(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt / self._dx)
+        zero_boundaries(K)
 
         # Inverse of density in taichi field
-        rho_inv = ti.field(float, _Nxyz)
-        rho_inv.fill(self._dt / (self._rho * self._dx))
-        # zero_boundaries(rho_inv)
+        rho_inv = [ti.field(float, _Nxyz) for _ in range(Nd)]
+        # rho_inv_x.fill(self._dt / (self._rho * self._dx))
+        rho_inv[0].from_numpy(self._dt / (self._rho_grid_vx * self._dx))
+        rho_inv[1].from_numpy(self._dt / (self._rho_grid_vy * self._dy))
+        zero_boundaries(rho_inv[0])
+        zero_boundaries(rho_inv[1])
 
         @ti.func
-        def D(u, xyz, nd: int, bf: int, imax):
+        def D(u: ti.template(), xyz, nd: int, bf: int, imax: int):
             """
             Derivative operator
 
@@ -179,34 +185,42 @@ class SimulatorTaichiStaggered(Simulator):
             return d
 
         @ti.func
-        def cpml(d, psi, xyz, nd: int, al, bl, kl, ar, br, kr):
-            """
-            CPML operator
-
-            Parameters
-            ----------
-            d: derivative of field
-            psi: auxiliary field
-            xyz: coordinate
-            nd: dimension
-            al, bl, kl: left parameters
-            ar, br, kr: right parameters
-
-            Returns
-            -------
-            r: update term
-            """
+        def cpml_(d, psi, xyz, nd: int, nabc): #, al, bl, kl, ar, br, kr):
             r = d
             if xyz[nd] < Nabc[nd, 0]:
                 i = xyz[nd]
-                r = r / kl[i] + psi[xyz]
-                psi[xyz] = bl[i] * psi[xyz] + al[i] * d
+                if nabc:
+                    psi[xyz] = bf[i] * psi[xyz] + af[i] * d
+                    r = r / kf[i] + psi[xyz]
+                else:
+                    psi[xyz] = bh[i] * psi[xyz] + ah[i] * d
+                    r = r / kh[i] + psi[xyz]
+
             elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
                 xyz_r = xyz[:]
                 xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
                 i = Nxyz[nd] - xyz[nd] - 1
-                r = r / kr[i] + psi[xyz_r]
-                psi[xyz_r] = br[i] * psi[xyz_r] + ar[i] * d
+                if nabc:
+                    psi[xyz_r] = bh[i] * psi[xyz_r] + ah[i] * d
+                    r = r / kh[i] + psi[xyz_r]
+                else:
+                    psi[xyz_r] = bf[i] * psi[xyz_r] + af[i] * d
+                    r = r / kf[i] + psi[xyz_r]
+            return r
+
+        @ti.func
+        def cpml(d, psi, xyz, nd: int, al, bl, kl, ar, br, kr):
+            r = d
+            if xyz[nd] < Nabc[nd, 0]:
+                i = xyz[nd]
+                psi[xyz] = br[i] * psi[xyz] + ar[i] * d
+                r = r / kr[i] + psi[xyz]
+            elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
+                xyz_r = xyz[:]
+                xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
+                i = Nxyz[nd] - xyz[nd] - 1
+                psi[xyz_r] = bl[i] * psi[xyz_r] + al[i] * d
+                r = r / kl[i] + psi[xyz_r]
             return r
 
         @ti.func
@@ -220,14 +234,14 @@ class SimulatorTaichiStaggered(Simulator):
             for nr in ti.static(range(self._n_rec)):
                 if all(xyz == xyz_r[nr]):
                     receiver[nt, nr] = p[xyz]
-        
+
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
                     d = D(v[nd], xyz, nd, 1, v[nd].shape[nd])
-                    p[xyz] -= K[xyz] * cpml(d, psi_v[nd], xyz, nd, ah, bh, kh, af, bf, kf)
-
+                    # p[xyz] -= K[xyz] * cpml_(d, psi_v[nd], xyz, nd, 0)
+                    p[xyz] -= K[xyz] * cpml(d, psi_v[nd], xyz, nd, af, bf, kf, ah, bh, kh)
                 add_source(p, xyz, nt)
                 read_sensors(p, xyz, nt)
 
@@ -236,13 +250,14 @@ class SimulatorTaichiStaggered(Simulator):
             for xyz in ti.grouped(p):
                 for nd in ti.static(range(Nd)):
                     d = D(p, xyz, nd, 0, p.shape[nd])
-                    v[nd][xyz] -= rho_inv[xyz] * cpml(d, psi_p[nd], xyz, nd, af, bf, kf, ah, bh, kh)
+                    # v[nd][xyz] -= rho_inv[nd][xyz] * cpml_(d, psi_p[nd], xyz, nd, 1)
+                    v[nd][xyz] -= rho_inv[nd][xyz] * cpml(d, psi_p[nd], xyz, nd, ah, bh, kh, af, bf, kf)
                     # Dirichlet
                     if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
                         v[nd][xyz] = 0.
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 10.
+        v_max = 1.
         v_min = - v_max
         def show_anim_func(nt: int, u):
             if not nt % self._it_display:
@@ -280,6 +295,7 @@ sim_instance = SimulatorTaichiStaggered(args.config)
 #%% Executa simulacao
 try:
     sim_instance.run()
+    plt.show()
     # pass
 
 except KeyError as key:
