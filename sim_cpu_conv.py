@@ -57,7 +57,7 @@ class SimulatorCpuConv(Simulator):
         last = ord - 1
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
+        v_max = .01 #100.0
         v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()

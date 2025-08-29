@@ -55,7 +55,7 @@
     "time_steps": 1500,
     "dt": 2.6e-4,
     "acc": 2,
-    "it_display": 10
+    "it_display": 5
   },
   "simul_configs":
   {

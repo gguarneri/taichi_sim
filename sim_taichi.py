@@ -123,15 +123,15 @@ class SimulatorTaichiStaggered(Simulator):
         K = ti.field(float, _Nxyz)
         # K.fill(self._cp**2 * self._rho * self._dt / self._dx)
         K.from_numpy(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt / self._dx)
-        zero_boundaries(K)
+        # zero_boundaries(K)
 
         # Inverse of density in taichi field
         rho_inv = [ti.field(float, _Nxyz) for _ in range(Nd)]
         # rho_inv_x.fill(self._dt / (self._rho * self._dx))
         rho_inv[0].from_numpy(self._dt / (self._rho_grid_vx * self._dx))
         rho_inv[1].from_numpy(self._dt / (self._rho_grid_vy * self._dy))
-        zero_boundaries(rho_inv[0])
-        zero_boundaries(rho_inv[1])
+        # zero_boundaries(rho_inv[0])
+        # zero_boundaries(rho_inv[1])
 
         @ti.func
         def D(u: ti.template(), xyz, nd: int, bf: int, imax: int):
@@ -254,10 +254,10 @@ class SimulatorTaichiStaggered(Simulator):
                     v[nd][xyz] -= rho_inv[nd][xyz] * cpml(d, psi_p[nd], xyz, nd, ah, bh, kh, af, bf, kf)
                     # Dirichlet
                     if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
-                        v[nd][xyz] = 0.
+                        pass # v[nd][xyz] = 0.
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 1.
+        v_max = .01
         v_min = - v_max
         def show_anim_func(nt: int, u):
             if not nt % self._it_display:
