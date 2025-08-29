@@ -110,14 +110,14 @@ class SimulatorTaichiStaggered(Simulator):
             psi_p[nd].fill(0.)
             psi_v[nd].fill(0.)
 
-        @ti.kernel
-        def zero_boundaries(prmtr: ti.template()):
-            for xyz in ti.grouped(prmtr):
-                cond = False
-                for nd in ti.static(range(Nd)):
-                    cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
-                if cond:
-                    prmtr[xyz] = 0.
+        # @ti.kernel
+        # def zero_boundaries(prmtr: ti.template()):
+        #     for xyz in ti.grouped(prmtr):
+        #         cond = False
+        #         for nd in ti.static(range(Nd)):
+        #             cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
+        #         if cond:
+        #             prmtr[xyz] = 0.
 
         # Bulk modulus in taichi field
         K = ti.field(float, _Nxyz)
@@ -153,7 +153,7 @@ class SimulatorTaichiStaggered(Simulator):
             d = 0.
             # imax = u.shape[nd[0]]
             for nc in ti.static(range(self._deriv_acc)):
-                # # Solution 1
+                # # Solution 1: 30 s
                 # xyz_p = xyz[:]
                 # xyz_n = xyz[:]
                 # xyz_p[nd] += nc + bf
@@ -162,7 +162,7 @@ class SimulatorTaichiStaggered(Simulator):
                 # b = u[xyz_n] if xyz_n[nd] >= 0 else 0
                 # d += ti.static(self._coefs[nc]) * (a - b)
 
-                # # Solution 2
+                # # Solution 2: 29.6 s
                 # xyz_tmp = xyz[:]
                 # xyz_tmp[nd] += nc + bf
                 # a = u[xyz_tmp] if xyz_tmp[nd] < imax else 0
@@ -174,7 +174,7 @@ class SimulatorTaichiStaggered(Simulator):
                 # ti.static_print(nd)
                 # c = c[ti.static(nd)]
 
-                # Solution 3
+                # Solution 3: 29.7 s
                 xyz[nd] += nc + bf
                 a = u[xyz] if xyz[nd] < imax else 0
                 xyz[nd] += - 2 * nc - 1
@@ -253,8 +253,8 @@ class SimulatorTaichiStaggered(Simulator):
                     # v[nd][xyz] -= rho_inv[nd][xyz] * cpml_(d, psi_p[nd], xyz, nd, 1)
                     v[nd][xyz] -= rho_inv[nd][xyz] * cpml(d, psi_p[nd], xyz, nd, ah, bh, kh, af, bf, kf)
                     # Dirichlet
-                    if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
-                        pass # v[nd][xyz] = 0.
+                    # if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
+                    #     pass  # v[nd][xyz] = 0.
 
         # Definicao dos limites para a plotagem dos campos
         v_max = .01
