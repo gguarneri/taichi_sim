@@ -12,8 +12,6 @@ from sim_support.simulator import Simulator
 # ======================
 import taichi as ti
 import matplotlib.pyplot as plt
-# from findiff import coefficients as fdcoeffs
-# from sim_taichi_common import SimulatorTaichiCommon
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
@@ -209,18 +207,18 @@ class SimulatorTaichiStaggered(Simulator):
             return r
 
         @ti.func
-        def cpml(d, psi, xyz, nd: int, al, bl, kl, ar, br, kr):
+        def cpml(d, psi, xyz, nd: int, ar, br, kr, al, bl, kl):
             r = d
             if xyz[nd] < Nabc[nd, 0]:
                 i = xyz[nd]
-                psi[xyz] = br[i] * psi[xyz] + ar[i] * d
-                r = r / kr[i] + psi[xyz]
+                psi[xyz] = bl[i] * psi[xyz] + al[i] * d
+                r = r / kl[i] + psi[xyz]
             elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
                 xyz_r = xyz[:]
                 xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
                 i = Nxyz[nd] - xyz[nd] - 1
-                psi[xyz_r] = bl[i] * psi[xyz_r] + al[i] * d
-                r = r / kl[i] + psi[xyz_r]
+                psi[xyz_r] = br[i] * psi[xyz_r] + ar[i] * d
+                r = r / kr[i] + psi[xyz_r]
             return r
 
         @ti.func
@@ -254,10 +252,10 @@ class SimulatorTaichiStaggered(Simulator):
                     v[nd][xyz] -= rho_inv[nd][xyz] * cpml(d, psi_p[nd], xyz, nd, ah, bh, kh, af, bf, kf)
                     # Dirichlet
                     # if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
-                    #     pass  # v[nd][xyz] = 0.
+                    #     v[nd][xyz] = 0.
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = .01
+        v_max = 100.
         v_min = - v_max
         def show_anim_func(nt: int, u):
             if not nt % self._it_display:
