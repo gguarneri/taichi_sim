@@ -34,16 +34,15 @@ class SimulatorTaichiStaggered(Simulator):
         ti.init(arch=ti.gpu, default_fp=ti.f32, default_ip=ti.i32)
 
         # Dimensions
-        try: _Nxyz = (self._nx,); _Nxyz += (self._ny,); _Nxyz += (self._nz,)
+        try: Nxyz_np = (self._nx,); Nxyz_np += (self._ny,); Nxyz_np += (self._nz,)
         except AttributeError: pass
-        Nd = len(_Nxyz)  # Number of dimensions
+        Nd = len(Nxyz_np)  # Number of dimensions
         Nxyz = ti.field(int, Nd)  # Dimensions in taichi field
-        Nxyz.from_numpy(np.array(_Nxyz).astype(np.int32))
+        Nxyz.from_numpy(np.array(Nxyz_np).astype(np.int32))
 
         # Pressure and velocity fields
-        p = ti.field(float, _Nxyz)
-        v = [ti.field(float, _Nxyz) for _ in range(Nd)]
-
+        p = ti.field(float, Nxyz_np)
+        v = [ti.field(float, Nxyz_np) for _ in range(Nd)]
 
         # Coordinates of sources
         try: xyz_s = (self._ix_src,); xyz_s += (self._iy_src,); xyz_s += (self._iz_src,)
@@ -68,38 +67,38 @@ class SimulatorTaichiStaggered(Simulator):
 
         # Absorbing Boundary Conditions (ABC)
         try:  # TODO: reavaliar ordem xyz, xzy, etc
-            _Nabc = ((self._roi._pml_xmax_len, self._roi._pml_xmin_len),)
-            _Nabc += ((self._roi._pml_zmax_len, self._roi._pml_zmin_len),)
-            _Nabc += ((self._roi._pml_ymax_len, self._roi._pml_ymin_len),)
+            Nabc_np = ((self._roi._pml_xmax_len, self._roi._pml_xmin_len),)
+            Nabc_np += ((self._roi._pml_zmax_len, self._roi._pml_zmin_len),)
+            Nabc_np += ((self._roi._pml_ymax_len, self._roi._pml_ymin_len),)
         except AttributeError: pass
         Nabc = ti.field(int, (3, 2))
-        Nabc.from_numpy(np.array(_Nabc).astype(np.int32))
+        Nabc.from_numpy(np.array(Nabc_np).astype(np.int32))
 
         # Convolutional Perfect Matched Layer (C-PML)
         # Auxiliary variables
         psi_p = []
         psi_v = []
         for nd in range(Nd):
-            Npml = list(_Nxyz)
-            Npml[nd] = _Nabc[nd][0] + _Nabc[nd][1]
+            Npml = list(Nxyz_np)
+            Npml[nd] = Nabc_np[nd][0] + Nabc_np[nd][1]
             psi_p.append(ti.field(float, Npml))
             psi_v.append(ti.field(float, Npml))
 
         # C-PML coefficients (to be used with forward operator)
-        bf = ti.field(float, np.max(_Nabc))
-        bf.from_numpy(self._b_x[:_Nabc[0][0], 0])
-        af = ti.field(float, np.max(_Nabc))
-        af.from_numpy(self._a_x[:_Nabc[0][0], 0])
-        kf = ti.field(float, np.max(_Nabc))
-        kf.from_numpy(self._k_x[:_Nabc[0][0], 0])
+        bf = ti.field(float, np.max(Nabc_np))
+        bf.from_numpy(self._b_x[:Nabc_np[0][0], 0])
+        af = ti.field(float, np.max(Nabc_np))
+        af.from_numpy(self._a_x[:Nabc_np[0][0], 0])
+        kf = ti.field(float, np.max(Nabc_np))
+        kf.from_numpy(self._k_x[:Nabc_np[0][0], 0])
 
         # C-PML coefficients (to be used with backward operator)
-        bh = ti.field(float, np.max(_Nabc))
-        bh.from_numpy(self._b_x_half[:_Nabc[0][0], 0])
-        ah = ti.field(float, np.max(_Nabc))
-        ah.from_numpy(self._a_x_half[:_Nabc[0][0], 0])
-        kh = ti.field(float, np.max(_Nabc))
-        kh.from_numpy(self._k_x_half[:_Nabc[0][0], 0])
+        bh = ti.field(float, np.max(Nabc_np))
+        bh.from_numpy(self._b_x_half[:Nabc_np[0][0], 0])
+        ah = ti.field(float, np.max(Nabc_np))
+        ah.from_numpy(self._a_x_half[:Nabc_np[0][0], 0])
+        kh = ti.field(float, np.max(Nabc_np))
+        kh.from_numpy(self._k_x_half[:Nabc_np[0][0], 0])
 
         # Filling fields with zeros
         p.fill(0.)
@@ -118,13 +117,13 @@ class SimulatorTaichiStaggered(Simulator):
         #             prmtr[xyz] = 0.
 
         # Bulk modulus in taichi field
-        K = ti.field(float, _Nxyz)
+        K = ti.field(float, Nxyz_np)
         # K.fill(self._cp**2 * self._rho * self._dt / self._dx)
         K.from_numpy(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt / self._dx)
         # zero_boundaries(K)
 
         # Inverse of density in taichi field
-        rho_inv = [ti.field(float, _Nxyz) for _ in range(Nd)]
+        rho_inv = [ti.field(float, Nxyz_np) for _ in range(Nd)]
         # rho_inv_x.fill(self._dt / (self._rho * self._dx))
         rho_inv[0].from_numpy(self._dt / (self._rho_grid_vx * self._dx))
         rho_inv[1].from_numpy(self._dt / (self._rho_grid_vy * self._dy))
