@@ -190,6 +190,8 @@ class Simulator:
         
         # Configuracao geral dos ensaios
         self._n_iter = self._configs.get("simul_configs",1).get("n_iter", 1)
+        self._max_val_fields = flt32(self._configs.get("simul_configs", 100.0).get("max_val_fields", 100.0))
+        self._min_val_fields = flt32(self._configs.get("simul_configs", -100.0).get("min_val_fields", -100.0))
         self._show_anim = bool(self._configs.get("simul_configs", False).get("show_anim", False))
         self._show_debug = bool(self._configs.get("simul_configs", False).get("show_debug", False))
         self._show_figs = bool(self._configs.get("simul_configs", False).get("show_figs", False))
@@ -247,9 +249,12 @@ class Simulator:
         self._pos_sources = -np.ones((self._nx, self._ny), dtype=int32)
         self._pos_sources[self._ix_src, self._iy_src] = np.array(idx_src).astype(int32).flatten()
 
+        self._pos_sensors = -np.ones((self._nx, self._ny), dtype=int32)
+        self._pos_sensors[self._ix_rec, self._iy_rec] = np.array(idx_rec).astype(int32).flatten()
+        
         # Converte idx_rec em um array
         self._idx_rec = np.array(idx_rec).astype(np.int32).flatten()
-        
+                
         # Receivers
         self._info_rec_pt = np.column_stack((self._ix_rec, self._iy_rec, self._idx_rec)).astype(int32)
         numbers = list(self._idx_rec)
