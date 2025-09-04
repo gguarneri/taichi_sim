@@ -142,5 +142,13 @@
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
+        {
+            "name": "Ponto Taichi-GAG",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi_gag.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
     ]
 }
