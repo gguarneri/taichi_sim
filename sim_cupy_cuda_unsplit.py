@@ -63,9 +63,15 @@ class SimulatorCupyCudaUnsplit(Simulator):
         d_pressure_past = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
         d_pressure_present = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
         d_pressure_future = cupy.asarray(np.zeros((self._nx, self._ny), dtype=flt32))
+        d_pressure_l2_norm = cupy.asarray(np.zeros(1, dtype=flt32))
         
         # Arrays para os sensores
-        sens_pressure = np.zeros((self._n_steps, self._n_rec), dtype=flt32)
+        d_sens_pressure = cupy.zeros((self._n_steps, self._n_rec), dtype=flt32)
+        d_delay_rec = cupy.asarray(self._delay_recv)
+        
+        # Arrays com as informacoes sobre os elementos emissores (sources) e receptores (sensors)
+        d_idx_src = cupy.asarray(self._pos_sources)
+        d_idx_sen = cupy.asarray(self._pos_sensors)
 
         # Calculo dos indices para o calculo das derivadas
         ord = self._deriv_acc
@@ -73,8 +79,6 @@ class SimulatorCupyCudaUnsplit(Simulator):
         d_idx_fd = cupy.asarray(idx_fd)
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
-        v_min = -v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
         iy_min = self._roi.get_iz_min()
@@ -86,13 +90,13 @@ class SimulatorCupyCudaUnsplit(Simulator):
         # Acrescenta eixo se source_term for array unidimensional
         if self._n_pto_src == 1:
             source_term = self._source_term[:, np.newaxis]
+        d_source_term = cupy.asarray(source_term)
             
         # Cria os kernels
         with open('sim_cupy_cuda_unsplit.cu') as kernel_file:
             kernel_string = kernel_file.read()
             pressure_first_der_kernel = cupy.RawKernel(kernel_string, 'pressure_first_der_kernel')
             pressure_second_der_kernel = cupy.RawKernel(kernel_string, 'pressure_second_der_kernel')
-            dirichlet_boundary_kernel = cupy.RawKernel(kernel_string, 'dirichlet_boundary_kernel')
             test_kernel = cupy.RawKernel(kernel_string, 'test_kernel')
 
             self._block_size_x = np.gcd(self._nx, 16)
@@ -123,38 +127,20 @@ class SimulatorCupyCudaUnsplit(Simulator):
                 d_memory_dpressurexx_dx, d_memory_dpressureyy_dy,
                 d_a_x, d_b_x, d_k_x,
                 d_a_y, d_b_y, d_k_y,
-                d_coefs, d_idx_fd,
+                d_coefs, d_idx_fd, d_source_term, d_idx_src, it, self._n_steps, self._n_pto_src,
+                d_pressure_l2_norm, d_sens_pressure, d_idx_sen, d_delay_rec, self._n_rec,
                 cupy.float32(self._dt), cupy.float32(self._one_dx), cupy.float32(self._one_dy),
                 cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord)))
-            
-            # Adicao das fontes no campo de pressao
-            for _isrc in range(self._n_pto_src):
-                d_pressure_future[self._ix_src[_isrc], self._iy_src[_isrc]] += (source_term[it - 1, _isrc] * self._dt**2 *
-                                                                                self._one_dx * self._one_dy)
 
-            # Aplica as condicoes de Dirichlet
-            dirichlet_boundary_kernel(grid_fields, block_size, (
-                d_pressure_past, d_pressure_present, d_pressure_future,
-                d_idx_fd,
-                cupy.int32(self._nx), cupy.int32(self._ny), cupy.int32(ord))
-            )
-
-            # Armazena os sinais dos sensores
-            for _i in range(self._idx_rec.shape[0]):
-                _irec = self._idx_rec[_i]
-                if it >= self._delay_recv[_irec]:
-                    _x = self._ix_rec[_i]
-                    _y = self._iy_rec[_i]
-                    sens_pressure[it - 1, _irec] += d_pressure_present[_x, _y]
-
-            psn2 = cupy.max(cupy.abs(d_pressure_present)).astype(flt32)
+            psn2 = d_pressure_l2_norm.get()[0]
             if (it % self._it_display) == 0 or it == 5:
                 if self._show_debug:
                     print(f"Time step {it} out of {self._n_steps}")
                     print(f"Max pressure = {psn2}")
 
                 if self._show_anim:
-                    self._windows_gpu[-1].imv.setImage(d_pressure_present[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
+                    self._windows_gpu[-1].imv.setImage(d_pressure_present[ix_min:ix_max, iy_min:iy_max].get(),
+                                                       levels=[self._min_val_fields, self._max_val_fields])
                     self._app.processEvents()
 
             # Verifica a estabilidade da simulacao
@@ -165,6 +151,7 @@ class SimulatorCupyCudaUnsplit(Simulator):
 
         # Pega os resultados da simulacao
         pressure = d_pressure_present.get()
+        sens_pressure = d_sens_pressure.get()
         
         # Libera a memoria alocada na GPU
         cupy.get_default_memory_pool().free_all_blocks()

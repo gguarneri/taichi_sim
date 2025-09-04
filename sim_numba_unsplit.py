@@ -77,8 +77,8 @@ class SimulatorNumbaUnsplit(Simulator):
                                        mdpxx_dx, mdpyy_dy,
                                        a_x, b_x, k_x,
                                        a_y, b_y, k_y,
-                                       coefs, idx_fd,
-                                       dt, one_dx, one_dy,
+                                       coefs, idx_fd, source_term, idx_source, it,
+                                       dt, one_dx, one_dy, p_2, idx_sen, sens_pressure, delay_rec,
                                        nx, ny, ord):
             x, y = cuda.grid(2)
             
@@ -109,57 +109,32 @@ class SimulatorNumbaUnsplit(Simulator):
                 mdpyy_dy[x, y] = mdpyy_dy_new
             
                 # Atualiza o campo de pressao futuro a partir do passado e do presente
-                press_ft[x, y] = 2.0 * press_pr[x, y] - press_past[x, y] + dt**2 * (vdpxx_dx + vdpyy_dy) * kappa[x, y]
-        
-        # Adicao das fontes no campo de pressao
-        @cuda.jit
-        def sources_kernel(pressure, source_term, idx_source, it, dt, one_dx, one_dy):
-            x, y = cuda.grid(2)
-
-            idx_src = idx_source[x, y]
-            if idx_src != -1:
-                pressure[x, y] += source_term[it - 1, idx_src] * dt**2 * one_dx * one_dy
-        
-        # Finalizacao da iteracao
-        @cuda.jit
-        def finish_it_kernel(press_past, press_pr, press_ft, idx_fd, p_2, nx, ny, ord):
-            x, y = cuda.grid(2)
-            
-            last = ord - 1
-            i_dix = -idx_fd[last, 2]
-            i_dfx = nx - idx_fd[last, 1]
-            i_diy = -idx_fd[last, 2]
-            i_dfy = ny - idx_fd[last, 1]
-            p_2_old = p_2[0]
-
-            # Aplica as condicoes de Dirichlet
-            if(x < i_dix or x > i_dfx or y < i_diy or y > i_dfy):
+                pressure_new = 2.0 * press_pr[x, y] - press_past[x, y] + dt**2 * (vdpxx_dx + vdpyy_dy) * kappa[x, y]
+                
+                # Adicao da fonte no campo de pressao
+                idx_src = idx_source[x, y]
+                if idx_src != -1:
+                    pressure_new += source_term[it - 1, idx_src] * dt**2 * one_dx * one_dy
+                    
+                press_ft[x, y] = pressure_new
+            else:
+                # Condicao de contorno Dirichlet (p = 0) nas bordas
                 press_ft[x, y] = 0.0
                 
             # Calcula a norma L2 da pressao
+            p_2_old = p_2[0]
             p_2_new = abs(press_ft[x, y])
             p_2[0] = p_2_old if p_2_old > p_2_new else p_2_new
             
             # Swap dos valores novos de pressao para valores antigos
             press_past[x, y] = press_pr[x, y]
             press_pr[x, y] = press_ft[x, y]
+        
+            # Armazena o sinal do sensor, se o pixel fizer parte de um receptor
+            sensor = idx_sen[x, y]
+            if sensor != -1 and it >= delay_rec[sensor]:
+                sens_pressure[it - 1, sensor] += press_pr[x, y]
             
-        # Armazenamento dos sensores
-        @cuda.jit
-        def store_sensors_kernel(pressure, sens_pressure,
-                                 offset_sensors, info_rec_pt, delay_rec,
-                                 it):
-            sensor = cuda.grid(1)
-            
-            pt = offset_sensors[sensor]
-            while info_rec_pt[pt, 2] == sensor:
-                if it >= delay_rec[sensor]:
-                    x = info_rec_pt[pt, 0]
-                    y = info_rec_pt[pt, 1]
-                    sens_pressure[it - 1, sensor] += pressure[x, y]
-                
-                pt += 1
-
         # ---------------------------------
         # Implementacao do simulador
         # ---------------------------------
@@ -203,8 +178,7 @@ class SimulatorNumbaUnsplit(Simulator):
         
         # Arrays para os sensores
         sens_pressure_gpu = cuda.to_device(np.zeros((self._n_steps, self._n_rec), dtype=flt32))
-        offset_sensors_gpu = cuda.to_device(self._offset_sensors)
-        info_rec_pt_gpu = cuda.to_device(self._info_rec_pt)
+        idx_sen_gpu = cuda.to_device(self._pos_sensors)
         delay_rec_gpu = cuda.to_device(self._delay_recv)
 
         # Calculo dos indices para o staggered grid
@@ -213,8 +187,6 @@ class SimulatorNumbaUnsplit(Simulator):
         idx_fd_gpu = cuda.to_device(idx_fd)
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
-        v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
         iy_min = self._roi.get_iz_min()
@@ -235,8 +207,6 @@ class SimulatorNumbaUnsplit(Simulator):
         block_size = (self._block_size_x, self._block_size_y)
         grid_fields = ((self._nx + block_size[0] - 1) // block_size[0],
                        (self._ny + block_size[1] - 1) // block_size[1])
-        sens_blk_sz = np.gcd(self._idx_rec_offset, 32)
-        grid_sens = (self._idx_rec_offset + sens_blk_sz - 1) // sens_blk_sz
         
         # Laco de tempo para execucao da simulacao
         t_gpu = time()
@@ -257,22 +227,11 @@ class SimulatorNumbaUnsplit(Simulator):
                                                                 memory_dpressurexx_dx_gpu, memory_dpressureyy_dy_gpu,
                                                                 a_x_gpu, b_x_gpu, k_x_gpu,
                                                                 a_y_gpu, b_y_gpu, k_y_gpu,
-                                                                coefs_gpu, idx_fd_gpu,
-                                                                self._dt, self._one_dx, self._one_dy,
+                                                                coefs_gpu, idx_fd_gpu, source_term_gpu, idx_src_gpu, it,
+                                                                self._dt, self._one_dx, self._one_dy, pressure_l2_norm_gpu,
+                                                                idx_sen_gpu, sens_pressure_gpu, delay_rec_gpu,
                                                                 self._nx, self._ny, ord)
             
-            # Adicao das fontes no campo de pressao
-            sources_kernel[grid_fields, block_size](pressure_future_gpu, source_term_gpu, idx_src_gpu,
-                                                    it, self._dt, self._one_dx, self._one_dy)
-            
-            # Aplica as condicoes de Dirichlet
-            finish_it_kernel[grid_fields, block_size](pressure_past_gpu, pressure_present_gpu, pressure_future_gpu,
-                                                      idx_fd_gpu, pressure_l2_norm_gpu, self._nx, self._ny, ord)
-
-            # Armazena os sinais dos sensores
-            store_sensors_kernel[grid_sens, sens_blk_sz](pressure_present_gpu, sens_pressure_gpu,
-                                                         offset_sensors_gpu, info_rec_pt_gpu, delay_rec_gpu, it)
-
             psn2 = pressure_l2_norm_gpu.copy_to_host()[0]
             if (it % self._it_display) == 0 or it == 5:
                 if self._show_debug:
@@ -280,7 +239,8 @@ class SimulatorNumbaUnsplit(Simulator):
                     print(f'Max pressure = {psn2}')
 
                 if self._show_anim:
-                    self._windows_gpu[0].imv.setImage(pressure_present_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(), levels=[v_min, v_max])
+                    self._windows_gpu[0].imv.setImage(pressure_present_gpu[ix_min:ix_max, iy_min:iy_max].copy_to_host(),
+                                                      levels=[self._min_val_fields, self._max_val_fields])
                     self._app.processEvents()
 
             # Verifica a estabilidade da simulacao

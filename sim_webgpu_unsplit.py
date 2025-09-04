@@ -125,9 +125,8 @@ class SimulatorWebGPUUnsplit(Simulator):
         # Tempo de espera para recepcao nos sensores
         b_delay_rec = self._device.create_buffer_with_data(data=self._delay_recv, usage=read_only_mask)
 
-        # Informacoes dos pontos receptores
-        b_info_rec_pt = self._device.create_buffer_with_data(data=self._info_rec_pt, usage=read_only_mask)
-        b_offset_sensors = self._device.create_buffer_with_data(data=self._offset_sensors, usage=read_only_mask)
+        # Indices dos sensores na ROI
+        b_idx_sen = self._device.create_buffer_with_data(data=self._pos_sensors, usage=read_only_mask)
 
         # Esquema de amarracao dos parametros (binding layouts [bl])
         # Parametros
@@ -168,7 +167,7 @@ class SimulatorWebGPUUnsplit(Simulator):
             "visibility": wgpu.ShaderStage.COMPUTE,
             "buffer": {
                 "type": wgpu.BufferBindingType.read_only_storage}
-            } for ii in range(1, 4)
+            } for ii in range(1, 3)
         ]
 
         # Configuracao das amarracoes (bindings)
@@ -311,11 +310,7 @@ class SimulatorWebGPUUnsplit(Simulator):
             },
             {
                 "binding": 2,
-                "resource": {"buffer": b_info_rec_pt, "offset": 0, "size": b_info_rec_pt.size},
-            },
-            {
-                "binding": 3,
-                "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
+                "resource": {"buffer": b_idx_sen, "offset": 0, "size": b_idx_sen.size},
             },
         ]
 
@@ -338,22 +333,11 @@ class SimulatorWebGPUUnsplit(Simulator):
         compute_pressure_second_der_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                                   compute={"module": cshader,
                                                                                            "entry_point": "pressure_second_der_kernel"})
-        compute_sources_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                      compute={"module": cshader,
-                                                                               "entry_point": "sources_kernel"})
-        compute_finish_it_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                        compute={"module": cshader,
-                                                                                 "entry_point": "finish_it_kernel"})
-        compute_store_sensors_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                            compute={"module": cshader,
-                                                                                     "entry_point": "store_sensors_kernel"})
         compute_incr_it_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                       compute={"module": cshader,
                                                                                "entry_point": "incr_it_kernel"})
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
-        v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
         iy_min = self._roi.get_iz_min()
@@ -385,18 +369,6 @@ class SimulatorWebGPUUnsplit(Simulator):
             compute_pass.set_pipeline(compute_pressure_second_der_kernel)
             compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
 
-            # Ativa o pipeline de adicao das fontes no campo de pressao
-            compute_pass.set_pipeline(compute_sources_kernel)
-            compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-            
-            # Ativa o pipeline de execucao dos procedimentos finais da iteracao
-            compute_pass.set_pipeline(compute_finish_it_kernel)
-            compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de execucao do armazenamento dos sensores
-            compute_pass.set_pipeline(compute_store_sensors_kernel)
-            compute_pass.dispatch_workgroups(self._idx_rec_offset)
-
             # Ativa o pipeline de atualizacao da amostra de tempo
             compute_pass.set_pipeline(compute_incr_it_kernel)
             compute_pass.dispatch_workgroups(1)
@@ -416,7 +388,8 @@ class SimulatorWebGPUUnsplit(Simulator):
 
                 if self._show_anim:
                     pressuregpu = np.asarray(self._device.queue.read_buffer(b_press_pr, buffer_offset=0).cast("f")).reshape((self._nx, self._ny))
-                    self._windows_gpu[0].imv.setImage(pressuregpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                    self._windows_gpu[0].imv.setImage(pressuregpu[ix_min:ix_max, iy_min:iy_max],
+                                                      levels=[self._min_val_fields, self._max_val_fields])
                     self._app.processEvents()
 
             # Verifica a estabilidade da simulacao

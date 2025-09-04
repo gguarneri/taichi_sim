@@ -539,37 +539,13 @@ fn get_delay_rec(s: i32) -> i32 {
 // ----------------------------------
 
 @group(2) @binding(2) // info rec ptos
-var<storage,read> info_rec_pt: array<i32>;
+var<storage,read> idx_sen: array<i32>;
 
-// function to get a x-index of a receiver point
-fn get_idx_x_sensor(n: i32) -> i32 {
-    let index: i32 = ij(n, 0, sim_int_par.n_rec_pt, 3);
+// function to get an index of a sensor
+fn get_idx_sensor(x: i32, y: i32) -> i32 {
+    let index: i32 = ij(x, y, sim_int_par.x_sz, sim_int_par.y_sz);
 
-    return select(-1, info_rec_pt[index], index != -1);
-}
-
-// function to get a y-index of a receiver point
-fn get_idx_y_sensor(n: i32) -> i32 {
-    let index: i32 = ij(n, 1, sim_int_par.n_rec_pt, 3);
-
-    return select(-1, info_rec_pt[index], index != -1);
-}
-
-// function to get a sensor-index of a receiver point
-fn get_idx_sensor(n: i32) -> i32 {
-    let index: i32 = ij(n, 2, sim_int_par.n_rec_pt, 3);
-
-    return select(-1, info_rec_pt[index], index != -1);
-}
-
-// ----------------------------------
-
-@group(2) @binding(3) // info rec ptos
-var<storage,read> offset_sensors: array<i32>;
-
-// function to get the offset of a sensor receiver in info_rec_pt table
-fn get_offset_sensor(s: i32) -> i32 {
-    return select(-1, offset_sensors[s], s >= 0 && s < sim_int_par.n_rec_el);
+    return select(-1, idx_sen[index], index != -1);
 }
 
 // ---------------
@@ -648,6 +624,7 @@ fn pressure_second_der_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let ord: i32 = sim_int_par.fd_coeff;
     let last: i32 = ord - 1;
     let offset: i32 = ord - 1;
+    let it: i32 = sim_int_par.it;
 
     // Pressure
     var id_x_i: i32 = -get_idx_ff(last);
@@ -673,75 +650,35 @@ fn pressure_second_der_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdpyy_dy(x, y, mdpyy_dy_new);
 
         // Atualiza o campo de pressao futuro a partir do passado e do presente
-        let press_ft: f32 = 2.0 * get_press_pr(x, y) - get_press_past(x, y) + 
+        var press_ft: f32 = 2.0 * get_press_pr(x, y) - get_press_past(x, y) + 
                             dt * dt * (vdpxx_dx + vdpyy_dy) * get_kappa(x, y);
+
+        // Adiciona a fonte
+        let idx_src_term: i32 = get_idx_source_term(x, y);
+        if(idx_src_term != -1) {
+            press_ft += get_source_term(it, idx_src_term) * dt * dt * one_dx * one_dy;
+        }
         set_press_ft(x, y, press_ft);
     }
-}
-
-// Kernel to add the sources forces
-@compute
-@workgroup_size(wsx, wsy)
-fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
-    let x: i32 = i32(index.x);          // x thread index
-    let y: i32 = i32(index.y);          // y thread index
-    let dt: f32 = sim_flt_par.dt;
-    let one_dx: f32 = 1.0 / sim_flt_par.dx;
-    let one_dy: f32 = 1.0 / sim_flt_par.dy;
-    let it: i32 = sim_int_par.it;
-
-    // Add the source force
-    let idx_src_term: i32 = get_idx_source_term(x, y);
-    if(idx_src_term != -1) {
-        let pressure: f32 = get_press_ft(x, y) + get_source_term(it, idx_src_term) * dt * dt * one_dx * one_dy;
-        set_press_ft(x, y, pressure);
-    }
-}
-
-// Kernel to finish iteration term
-@compute
-@workgroup_size(wsx, wsy)
-fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
-    let x: i32 = i32(index.x);          // x thread index
-    let y: i32 = i32(index.y);          // y thread index
-    let ord: i32 = sim_int_par.fd_coeff;
-    let last: i32 = ord - 1;
-    let id_x_i: i32 = -get_idx_fh(last);
-    let id_x_f: i32 = sim_int_par.x_sz - get_idx_if(last);
-    let id_y_i: i32 = -get_idx_fh(last);
-    let id_y_f: i32 = sim_int_par.y_sz - get_idx_if(last);
-    let p_2_old: f32 = p_2;
-
-    // Apply Dirichlet conditions
-    if(x < id_x_i || x > id_x_f || y < id_y_i || y > id_y_f) {
+    else {
+        // Apply Dirichlet conditions
         set_press_ft(x, y, 0.0);
     }
 
     // Compute pressure norm L2
+    let p_2_old: f32 = p_2;
     let p2: f32 = abs(get_press_ft(x, y));
     p_2 = max(p_2_old, p2);
 
     // Swap dos valores novos de pressao para valores antigos
     set_press_past(x, y, get_press_pr(x, y));
     set_press_pr(x, y, get_press_ft(x, y));
-}
-
-// Kernel to store sensors
-@compute
-@workgroup_size(idx_rec_offset)
-fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
-    let sensor: i32 = i32(index.x);          // x thread index
-    let it: i32 = sim_int_par.it;
 
     // Store sensors velocities
-    for(var pt: i32 = get_offset_sensor(sensor); get_idx_sensor(pt) == sensor; pt++) {
-        if(it >= get_delay_rec(sensor)) {
-            let x: i32 = get_idx_x_sensor(pt);
-            let y: i32 = get_idx_y_sensor(pt);
-
-            let value_sens_pressure: f32 = get_sens_pressure(it, sensor) + get_press_pr(x, y);
-            set_sens_pressure(it, sensor, value_sens_pressure);
-        }
+    let sensor: i32 = get_idx_sensor(x, y);
+    if(sensor != -1 && it >= get_delay_rec(sensor)) {
+        let value_sens_pressure: f32 = get_sens_pressure(it, sensor) + get_press_pr(x, y);
+        set_sens_pressure(it, sensor, value_sens_pressure);
     }
 }
 
