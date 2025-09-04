@@ -67,8 +67,6 @@ class SimulatorPytorchConvSplit(Simulator):
         pressure = torch.zeros((self._nx, self._ny), dtype=torch.float32, device=device)
         
         # Arrays para os sensores
-        sens_vx = torch.zeros((self._n_steps, self._n_rec), dtype=torch.float32, device=device)
-        sens_vy = torch.zeros((self._n_steps, self._n_rec), dtype=torch.float32, device=device)
         sens_pressure = torch.zeros((self._n_steps, self._n_rec), dtype=torch.float32, device=device)
 
         # Calculo dos indices para o staggered grid
@@ -77,8 +75,6 @@ class SimulatorPytorchConvSplit(Simulator):
         last = ord - 1
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
-        v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
         iy_min = self._roi.get_iz_min()
@@ -203,8 +199,6 @@ class SimulatorPytorchConvSplit(Simulator):
                     if it >= self._delay_recv[_irec]:
                         _x = self._ix_rec[_i]
                         _y = self._iy_rec[_i]
-                        sens_vx[it - 1, _irec] += vx[_x, _y]
-                        sens_vy[it - 1, _irec] += vy[_x, _y]
                         sens_pressure[it - 1, _irec] += pressure[_x, _y]
 
                 psn2 = torch.max(torch.abs(pressure)).item()
@@ -214,7 +208,8 @@ class SimulatorPytorchConvSplit(Simulator):
                         print(f"Max absolute value of pressure = {psn2}")
 
                     if self._show_anim:
-                        self._windows_gpu[0].imv.setImage(pressure[ix_min:ix_max, iy_min:iy_max].cpu().numpy(), levels=[v_min, v_max])
+                        self._windows_gpu[0].imv.setImage(pressure[ix_min:ix_max, iy_min:iy_max].cpu().numpy(),
+                                                          levels=[self._min_val_fields, self._max_val_fields])
                         self._app.processEvents()
 
                 # Verifica a estabilidade da simulacao
@@ -223,8 +218,6 @@ class SimulatorPytorchConvSplit(Simulator):
                 
         sim_time = time() - t_gpu
         pressure = pressure.cpu().numpy()
-        sens_vx = sens_vx.cpu().numpy()
-        sens_vy = sens_vy.cpu().numpy()
         sens_pressure = sens_pressure.cpu().numpy()
 
         # --------------------------------------------

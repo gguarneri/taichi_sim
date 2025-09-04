@@ -66,8 +66,6 @@ class SimulatorCupyConv(Simulator):
         pressure_gpu = cupy.zeros((self._nx, self._ny), dtype=cupy.float32)
         
         # Arrays para os sensores
-        sens_vx = np.zeros((self._n_steps, self._n_rec), dtype=flt32)
-        sens_vy = np.zeros((self._n_steps, self._n_rec), dtype=flt32)
         sens_pressure = np.zeros((self._n_steps, self._n_rec), dtype=flt32)
 
         # Calculo dos indices para o staggered grid
@@ -76,8 +74,6 @@ class SimulatorCupyConv(Simulator):
         last = ord - 1
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
-        v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
         iy_min = self._roi.get_iz_min()
@@ -190,8 +186,6 @@ class SimulatorCupyConv(Simulator):
                 if it >= self._delay_recv[_irec]:
                     _x = self._ix_rec[_i]
                     _y = self._iy_rec[_i]
-                    sens_vx[it - 1, _irec] += vx_gpu[_x, _y]
-                    sens_vy[it - 1, _irec] += vy_gpu[_x, _y]
                     sens_pressure[it - 1, _irec] += pressure_gpu[_x, _y]
 
             psn2 = cupy.max(cupy.abs(pressure_gpu)).astype(flt32)
@@ -201,7 +195,8 @@ class SimulatorCupyConv(Simulator):
                     print(f"Max absolute value of pressure = {psn2}")
 
                 if self._show_anim:
-                    self._windows_gpu[0].imv.setImage(pressure_gpu[ix_min:ix_max, iy_min:iy_max].get(), levels=[v_min, v_max])
+                    self._windows_gpu[0].imv.setImage(pressure_gpu[ix_min:ix_max, iy_min:iy_max].get(),
+                                                      levels=[self._min_val_fields, self._max_val_fields])
                     self._app.processEvents()
 
             # Verifica a estabilidade da simulacao

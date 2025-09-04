@@ -76,8 +76,6 @@ class SimulatorPytorchConvUnsplit(Simulator):
         last = ord - 1
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
-        v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
         iy_min = self._roi.get_iz_min()
@@ -178,7 +176,8 @@ class SimulatorPytorchConvUnsplit(Simulator):
                     print(f"Max absolute value of pressure = {psn2}")
 
                 if self._show_anim:
-                    self._windows_gpu[0].imv.setImage(pressure_future[ix_min:ix_max, iy_min:iy_max].cpu().numpy(), levels=[v_min, v_max])
+                    self._windows_gpu[0].imv.setImage(pressure_future[ix_min:ix_max, iy_min:iy_max].cpu().numpy(),
+                                                      levels=[self._min_val_fields, self._max_val_fields])
                     self._app.processEvents()
                     
             # Swap dos valores novos de pressao para valores antigos
