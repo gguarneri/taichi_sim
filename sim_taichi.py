@@ -108,24 +108,13 @@ class SimulatorTaichiStaggered(Simulator):
             psi_p[nd].fill(0.)
             psi_v[nd].fill(0.)
 
-        # @ti.kernel
-        # def zero_boundaries(prmtr: ti.template()):
-        #     for xyz in ti.grouped(prmtr):
-        #         cond = False
-        #         for nd in ti.static(range(Nd)):
-        #             cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
-        #         if cond:
-        #             prmtr[xyz] = 0.
-
         # Bulk modulus in taichi field
         K = ti.field(float, _Nxyz)
         K.fill(self._cp**2 * self._rho * self._dt / self._dx)
-        # zero_boundaries(K)
 
         # Inverse of density in taichi field
         rho_inv = ti.field(float, _Nxyz)
         rho_inv.fill(self._dt / (self._rho * self._dx))
-        # zero_boundaries(rho_inv)
 
         @ti.func
         def D(u, xyz, nd: int, bf: int, imax):
@@ -136,39 +125,16 @@ class SimulatorTaichiStaggered(Simulator):
             ----------
             u: field
             xyz: coordinate
-            nd: dimension
+            nd: dimension (0: x, 1: y, 2: z)
             bf: backward (0) or forward (1)
-            imax: maximum index
+            imax: maximum index (nx, xy or nz)
 
             Returns
             -------
             d: derivative of field
             """
             d = 0.
-            # imax = u.shape[nd[0]]
             for nc in ti.static(range(self._deriv_acc)):
-                # # Solution 1
-                # xyz_p = xyz[:]
-                # xyz_n = xyz[:]
-                # xyz_p[nd] += nc + bf
-                # xyz_n[nd] -= nc - bf + 1
-                # a = u[xyz_p] if xyz_p[nd] < imax else 0
-                # b = u[xyz_n] if xyz_n[nd] >= 0 else 0
-                # d += ti.static(self._coefs[nc]) * (a - b)
-
-                # # Solution 2
-                # xyz_tmp = xyz[:]
-                # xyz_tmp[nd] += nc + bf
-                # a = u[xyz_tmp] if xyz_tmp[nd] < imax else 0
-                # xyz_tmp[nd] += - 2 * nc - 1
-                # b = u[xyz_tmp] if xyz_tmp[nd] >= 0 else 0
-                # d += ti.static(self._coefs[nc]) * (a - b)
-
-                # c = u.shape[0]
-                # ti.static_print(nd)
-                # c = c[ti.static(nd)]
-
-                # Solution 3
                 xyz[nd] += nc + bf
                 a = u[xyz] if xyz[nd] < imax else 0
                 xyz[nd] += - 2 * nc - 1
@@ -242,14 +208,12 @@ class SimulatorTaichiStaggered(Simulator):
                         v[nd][xyz] = 0.
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 10.
-        v_min = - v_max
         def show_anim_func(nt: int, u):
             if not nt % self._it_display:
                 # TODO: reavaliar xyz
                 u_np = u.to_numpy()[
                     self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iz_min():self._roi.get_iz_max()]
-                self._windows_gpu[0].imv.setImage(u_np, levels=[v_min, v_max])
+                self._windows_gpu[0].imv.setImage(u_np, levels=[self._min_val_fields, self._max_val_fields])
                 self._app.processEvents()
 
         t_init = time()
