@@ -20,7 +20,7 @@ class Simulator:
         self._device = None
         self._name = "simulator"
         self._sim_model = sim_model
-        
+
         # -----------------------
         # Leitura da configuracao no formato JSON
         # -----------------------
@@ -33,16 +33,16 @@ class Simulator:
             match self._sim_model:
                 case "unsplit":
                     self._coefs = np.array(coefs_forward[self._deriv_acc - 2], dtype=flt32)
-                    
+
                 case _:
                     self._coefs = np.array(coefs_Lui[self._deriv_acc - 2], dtype=flt32)
-            
+
         except IndexError:
             print(f"Acurácia das derivadas {self._deriv_acc} não suportada. Usando o maior valor permitido (6).")
             match self._sim_model:
                 case "unsplit":
                     self._coefs = np.array(coefs_forward[-1], dtype=flt32)
-                    
+
                 case _:
                     self._coefs = np.array(coefs_Lui[-1], dtype=flt32)
         
@@ -196,6 +196,7 @@ class Simulator:
         self._show_debug = bool(self._configs.get("simul_configs", False).get("show_debug", False))
         self._show_figs = bool(self._configs.get("simul_configs", False).get("show_figs", False))
         self._plot_results = bool(self._configs.get("simul_configs", False).get("plot_results", False))
+        self._plot_error = bool(self._configs.get("simul_configs", False).get("plot_error", False))
         self._plot_sensors = bool(self._configs.get("simul_configs", False).get("plot_sensors", False))
         self._plot_bscan = bool(self._configs.get("simul_configs", False).get("plot_bscan", False))
         self._save_results = bool(self._configs.get("simul_configs", False).get("save_results", False))
@@ -222,7 +223,7 @@ class Simulator:
                 ord_source = 2
             case _:
                 ord_source = 1
-        
+
         for _pr in self._probes:
             if self._source_env:
                 st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e', ord_der=ord_source)
@@ -322,7 +323,16 @@ class Simulator:
                     pressure = results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
                             self._roi.get_iz_min():self._roi.get_iz_max()]
                     if pressure_ref.shape == pressure.shape:
-                        mse_pressure = np.mean((pressure_ref - pressure) ** 2)
+                        error_pressure = pressure_ref - pressure
+                        mse_pressure = np.mean(error_pressure ** 2)
+                        if self._plot_error:
+                            pressure_err_fig = plt.figure()
+                            plt.title(f'{self._name} simulation pressure error - law ({law})\n({self._nx}x{self._ny})')
+                            plt.imshow(error_pressure, aspect='auto', cmap='gray',
+                                       extent=(self._roi.w_points[0], self._roi.w_points[-1],
+                                               self._roi.h_points[-1], self._roi.h_points[0])
+                                       )
+                            plt.colorbar()
                     else:
                         mse_pressure = np.inf
 
@@ -359,7 +369,7 @@ class Simulator:
                     # Salva a imagem do campo de pressao
                     if self._save_results:
                         pressure_sim_result.savefig(name + '_field_pressure.png')
-                
+
                 # Salva o campo de pressao
                 if self._save_results and self._save_field:
                     np.save(name + '_field_pressure', results_dict["pressure"])
@@ -433,7 +443,7 @@ class Simulator:
         if self._save_sources:
             name = os.path.join(result_dir, f'sources_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}')
             np.save(name, self._source_term)
-        
+
         if self._save_results:
             name = os.path.join(result_dir, f'result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_')
