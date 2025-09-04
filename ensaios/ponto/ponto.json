@@ -61,6 +61,8 @@
   {
     "n_iter": 1,
     "show_anim": 1,
+    "max_val_fields": 100.0,
+    "min_val_fields": -100.0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
