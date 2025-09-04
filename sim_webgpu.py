@@ -118,16 +118,13 @@ class SimulatorWebGPU(Simulator):
         b_memory_dpressure_dy = self._device.create_buffer_with_data(data=np.zeros((self._nx, self._ny), dtype=flt32), usage=read_only_mask)
 
         # Sinais dos sensores
-        b_sens_x = self._device.create_buffer_with_data(data=np.zeros((self._n_steps, self._n_rec), dtype=flt32), usage=read_write_mask)
-        b_sens_y = self._device.create_buffer_with_data(data=np.zeros((self._n_steps, self._n_rec), dtype=flt32), usage=read_write_mask)
         b_sens_pressure = self._device.create_buffer_with_data(data=np.zeros((self._n_steps, self._n_rec), dtype=flt32), usage=read_write_mask)
 
         # Tempo de espera para recepcao nos sensores
         b_delay_rec = self._device.create_buffer_with_data(data=self._delay_recv, usage=read_only_mask)
-
-        # Informacoes dos pontos receptores
-        b_info_rec_pt = self._device.create_buffer_with_data(data=self._info_rec_pt, usage=read_only_mask)
-        b_offset_sensors = self._device.create_buffer_with_data(data=self._offset_sensors, usage=read_only_mask)
+        
+        # Indices dos sensores na ROI
+        b_idx_sen = self._device.create_buffer_with_data(data=self._pos_sensors, usage=read_only_mask)
 
         # Esquema de amarracao dos parametros (binding layouts [bl])
         # Parametros
@@ -157,18 +154,18 @@ class SimulatorWebGPU(Simulator):
 
         # Sensores
         bl_sensors = [
-            {"binding": ii,
+            {"binding": 0,
             "visibility": wgpu.ShaderStage.COMPUTE,
             "buffer": {
                 "type": wgpu.BufferBindingType.storage}
-            } for ii in range(0, 3)
+            }
         ]
         bl_sensors += [
             {"binding": ii,
             "visibility": wgpu.ShaderStage.COMPUTE,
             "buffer": {
                 "type": wgpu.BufferBindingType.read_only_storage}
-            } for ii in range(3, 6)
+            } for ii in range(1, 3)
         ]
 
         # Configuracao das amarracoes (bindings)
@@ -291,27 +288,15 @@ class SimulatorWebGPU(Simulator):
         b_sensors = [
             {
                 "binding": 0,
-                "resource": {"buffer": b_sens_x, "offset": 0, "size": b_sens_x.size},
-            },
-            {
-                "binding": 1,
-                "resource": {"buffer": b_sens_y, "offset": 0, "size": b_sens_y.size},
-            },
-            {
-                "binding": 2,
                 "resource": {"buffer": b_sens_pressure, "offset": 0, "size": b_sens_pressure.size},
             },
             {
-                "binding": 3,
+                "binding": 1,
                 "resource": {"buffer": b_delay_rec, "offset": 0, "size": b_delay_rec.size},
             },
             {
-                "binding": 4,
-                "resource": {"buffer": b_info_rec_pt, "offset": 0, "size": b_info_rec_pt.size},
-            },
-            {
-                "binding": 5,
-                "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
+                "binding": 2,
+                "resource": {"buffer": b_idx_sen, "offset": 0, "size": b_idx_sen.size},
             },
         ]
 
@@ -331,25 +316,14 @@ class SimulatorWebGPU(Simulator):
         compute_pressure_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                        compute={"module": cshader,
                                                                                 "entry_point": "pressure_kernel"})
-        compute_sources_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                      compute={"module": cshader,
-                                                                               "entry_point": "sources_kernel"})
         compute_velocity_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                        compute={"module": cshader,
                                                                                 "entry_point": "velocity_kernel"})
-        compute_finish_it_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                        compute={"module": cshader,
-                                                                                 "entry_point": "finish_it_kernel"})
-        compute_store_sensors_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                            compute={"module": cshader,
-                                                                                     "entry_point": "store_sensors_kernel"})
         compute_incr_it_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                       compute={"module": cshader,
                                                                                "entry_point": "incr_it_kernel"})
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.0
-        v_min = - v_max
         ix_min = self._roi.get_ix_min()
         ix_max = self._roi.get_ix_max()
         iy_min = self._roi.get_iz_min()
@@ -376,22 +350,10 @@ class SimulatorWebGPU(Simulator):
             # # Ativa o pipeline de execucao do calculo da pressao
             compute_pass.set_pipeline(compute_pressure_kernel)
             compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de adicao das fontes no campo de pressao
-            compute_pass.set_pipeline(compute_sources_kernel)
-            compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-            
+           
             # Ativa o pipeline de execucao do calculo das velocidades
             compute_pass.set_pipeline(compute_velocity_kernel)
             compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de execucao dos procedimentos finais da iteracao
-            compute_pass.set_pipeline(compute_finish_it_kernel)
-            compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de execucao do armazenamento dos sensores
-            compute_pass.set_pipeline(compute_store_sensors_kernel)
-            compute_pass.dispatch_workgroups(self._idx_rec_offset)
 
             # Ativa o pipeline de atualizacao da amostra de tempo
             compute_pass.set_pipeline(compute_incr_it_kernel)
@@ -412,7 +374,8 @@ class SimulatorWebGPU(Simulator):
 
                 if self._show_anim:
                     pressuregpu = np.asarray(self._device.queue.read_buffer(b_pressure, buffer_offset=0).cast("f")).reshape((self._nx, self._ny))
-                    self._windows_gpu[0].imv.setImage(pressuregpu[ix_min:ix_max, iy_min:iy_max], levels=[v_min, v_max])
+                    self._windows_gpu[0].imv.setImage(pressuregpu[ix_min:ix_max, iy_min:iy_max],
+                                                      levels=[self._min_val_fields, self._max_val_fields])
                     self._app.processEvents()
 
             # Verifica a estabilidade da simulacao
