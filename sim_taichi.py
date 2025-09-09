@@ -131,7 +131,7 @@ class SimulatorTaichiStaggered(Simulator):
         # zero_boundaries(rho_inv[1])
 
         @ti.func
-        def D(u: ti.template(), xyz, nd: int, bf: int, imax: int):
+        def D(u: ti.template(), xyz, nd: int, bf: int, imax: int): # type: ignore
             """
             Derivative operator
 
@@ -254,14 +254,12 @@ class SimulatorTaichiStaggered(Simulator):
                     #     v[nd][xyz] = 0.
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = 100.
-        v_min = - v_max
         def show_anim_func(nt: int, u):
             if not nt % self._it_display:
                 # TODO: reavaliar xyz
                 u_np = u.to_numpy()[
                     self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iz_min():self._roi.get_iz_max()]
-                self._windows_gpu[0].imv.setImage(u_np, levels=[v_min, v_max])
+                self._windows_gpu[0].imv.setImage(u_np, levels=[self._min_val_fields, self._max_val_fields])
                 self._app.processEvents()
 
         t_init = time()
@@ -280,10 +278,7 @@ class SimulatorTaichiStaggered(Simulator):
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-# parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
-default_config_file = "ensaios/ponto/ponto.json"
-parser.add_argument('-c', '--config', help='Configuration file', default=default_config_file)
-
+parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
 args = parser.parse_args()
 
 # Cria a instancia do simulador

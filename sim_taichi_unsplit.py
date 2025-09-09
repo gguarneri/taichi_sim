@@ -32,7 +32,7 @@ class SimulatorTaichiUnsplit(Simulator):
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
 
-        ti.init(arch=ti.gpu, default_fp=ti.f32, default_ip=ti.i32)
+        ti.init(arch=ti.gpu, default_fp=ti.f32, default_ip=ti.i32, debug=True)
 
         # Dimensions
         try: Nxyz_np = (self._nx,); Nxyz_np += (self._ny,); Nxyz_np += (self._nz,)
@@ -133,7 +133,7 @@ class SimulatorTaichiUnsplit(Simulator):
         # rho_inv[1].from_numpy(self._dt / (self._rho_grid_vy * self._dy))
 
         @ti.func
-        def D(u: ti.template(), xyz, nd: int, bf: int, imax: int):
+        def D(u: ti.template(), xyz, nd: int, bf: int, imax: int): # type: ignore
             """
             Derivative operator
 
@@ -193,6 +193,7 @@ class SimulatorTaichiUnsplit(Simulator):
                 r = r / kl[i] + psi[xyz]
             elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
                 xyz_r = xyz[:]
+                assert xyz_r[nd] >= Nxyz[nd] - Nabc[nd, 1]
                 xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
                 i = Nxyz[nd] - xyz[nd] - 1
                 psi[xyz_r] = br[i] * psi[xyz_r] + ar[i] * d
@@ -238,14 +239,12 @@ class SimulatorTaichiUnsplit(Simulator):
                     dp[nd][xyz] = cpml(d, psi_p[nd], xyz, nd, ah, bh, kh, af, bf, kf)
 
         # Definicao dos limites para a plotagem dos campos
-        v_max = .01 #100.
-        v_min = - v_max
         def show_anim_func(nt: int, u):
             if not nt % self._it_display:
                 # TODO: reavaliar xyz
                 u_np = u.to_numpy()[
                     self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iz_min():self._roi.get_iz_max()]
-                self._windows_gpu[0].imv.setImage(u_np, levels=[v_min, v_max])
+                self._windows_gpu[0].imv.setImage(u_np, levels=[self._min_val_fields, self._max_val_fields])
                 self._app.processEvents()
 
         offsets = tuple(np.arange(-self._deriv_acc, self._deriv_acc) + .5)
@@ -269,9 +268,7 @@ class SimulatorTaichiUnsplit(Simulator):
 # Avaliacao dos parametros na linha de comando
 # ----------------------------------------------------------
 parser = argparse.ArgumentParser()
-# parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
-default_config_file = "ensaios/ponto/ponto.json"
-parser.add_argument('-c', '--config', help='Configuration file', default=default_config_file)
+parser.add_argument('-c', '--config', help='Configuration file', default='config.json')
 args = parser.parse_args()
 
 # Cria a instancia do simulador
