@@ -107,7 +107,7 @@ if __name__ == "__main__":
     env["PYTHONPATH"] = os.pathsep.join(sys.path)
 
     CONFIG_FILE = os.path.join(".", "ensaios", "ponto", "ponto_sem_plots.json")
-    SCRIPTS_PATTERN = "sim_*.py"
+    SCRIPTS_PATTERN = "sim_cupy_rawkernel.py"
     RESULT_FILES_PATTERN = os.path.join(
         ".", "ensaios", "ponto", "results", "result_*__desc.txt"
     )
