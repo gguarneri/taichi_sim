@@ -190,6 +190,8 @@ class Simulator:
         
         # Configuracao geral dos ensaios
         self._n_iter = self._configs.get("simul_configs",1).get("n_iter", 1)
+        self._max_val_fields = flt32(self._configs.get("simul_configs", 100.0).get("max_val_fields", 100.0))
+        self._min_val_fields = flt32(self._configs.get("simul_configs", -100.0).get("min_val_fields", -100.0))
         self._show_anim = bool(self._configs.get("simul_configs", False).get("show_anim", False))
         self._show_debug = bool(self._configs.get("simul_configs", False).get("show_debug", False))
         self._show_figs = bool(self._configs.get("simul_configs", False).get("show_figs", False))
@@ -248,9 +250,12 @@ class Simulator:
         self._pos_sources = -np.ones((self._nx, self._ny), dtype=int32)
         self._pos_sources[self._ix_src, self._iy_src] = np.array(idx_src).astype(int32).flatten()
 
+        self._pos_sensors = -np.ones((self._nx, self._ny), dtype=int32)
+        self._pos_sensors[self._ix_rec, self._iy_rec] = np.array(idx_rec).astype(int32).flatten()
+        
         # Converte idx_rec em um array
         self._idx_rec = np.array(idx_rec).astype(np.int32).flatten()
-        
+                
         # Receivers
         self._info_rec_pt = np.column_stack((self._ix_rec, self._iy_rec, self._idx_rec)).astype(int32)
         numbers = list(self._idx_rec)
@@ -282,6 +287,7 @@ class Simulator:
     def run(self):
         now = datetime.now()
         sim_times = list()
+        sim_total_times = list()
         mse_values = list()
         for n in range(self._n_iter):
             print(f'Iteracao {n}')
@@ -293,12 +299,16 @@ class Simulator:
                         p.set_t0(self._emission_laws[law])
                 
                 # Roda o simulador
+                t_inic_simul = time()
                 results_dict = self.implementation()
+                sim_time_tot = time() - t_inic_simul
                 sim_times.append(results_dict["sim_time"])
+                sim_total_times.append(sim_time_tot)
                 
                 # Imprime algumas informacoes e cria o nome base dos arquivos de resultados
                 print(results_dict["gpu_str"])
                 print(f'{sim_times[-1]:.3}s')
+                print(f'Tempo total (inclui transferencia de dados): {sim_total_times[-1]:.3}s')
                 result_dir = self._results_dir if hasattr(self, "_results_dir") else os.path.join(".")
                 name = os.path.join(result_dir, f'result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_law_{law}')
@@ -418,11 +428,13 @@ class Simulator:
                     np.save(name + '_bscan_pressure', results_dict["sens_pressure"])
 
         sim_times = np.array(sim_times)
+        sim_total_times = np.array(sim_total_times)
         mse_values = np.array(mse_values)
 
         print(f'TEMPO - {self._n_steps} pontos de tempo')
         if self._n_iter > 5:
             print(f'Tempo medio de execucao: {sim_times[5:].mean():.3}s (std = {sim_times[5:].std():.4})')
+            print(f'Tempo medio total (inclui transferencia de dados): {sim_total_times[5:].mean():.3}s (std = {sim_total_times[5:].std():.4})')
             
         if self._n_iter > 5 and mse_values.shape[0] > 5:
             print(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4} (std = {mse_values[5:, 0].std():.4})')
@@ -452,6 +464,8 @@ class Simulator:
                 if self._n_iter > 5:
                     f.write(f'Tempo medio de execucao: {sim_times[5:].mean():.3}s\n')
                     f.write(f'Desvio padrao: {sim_times[5:].std():.4}\n')
+                    f.write(f'Tempo medio total (inclui transferencia de dados): {sim_total_times[5:].mean():.3}s\n')
+                    f.write(f'Desvio padrao: {sim_total_times[5:].std():.4}\n')
                     if mse_values.shape[0] > 5:
                         f.write(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4}\n')
                         f.write(f'Desvio padrao: {mse_values[5:, 0].std():.4}\n')
@@ -459,6 +473,7 @@ class Simulator:
                         f.write(f'Desvio padrao: {mse_values[5:, 1].std():.4}\n')
                 else:
                     f.write(f'Tempo execucao: {sim_times[-1]:.3}s\n')
+                    f.write(f'Tempo total (inclui transferencia de dados): {sim_total_times[-1]:.3}s\n')
                     if mse_values.shape[0] > 0:
                         f.write(f'MSE do campo de pressao: {mse_values[-1, 0]:.4}\n')
                         f.write(f'MSE medio dos sensores de pressao: {mse_values[-1, 1]:.4}\n')

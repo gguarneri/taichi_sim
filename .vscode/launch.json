@@ -5,10 +5,34 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Ponto WebGPU",
+            "name": "Ponto CPU-broadcast",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/sim_webgpu.py",
+            "program": "${workspaceFolder}/sim_cpu_broadcast.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CPU-broadcast-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_broadcast_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CPU-conv",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_conv.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CPU-conv-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cpu_conv_unsplit.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
@@ -21,6 +45,14 @@
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
         {
+            "name": "Ponto CuPy-conv-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cupy_conv_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
             "name": "Ponto CuPy-cuda",
             "type": "debugpy",
             "request": "launch",
@@ -29,10 +61,26 @@
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
         {
+            "name": "Ponto CuPy-cuda-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cupy_cuda_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
             "name": "Ponto CuPy-rawkernel",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/sim_cupy_rawkernel.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto CuPy-rawkernel-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_cupy_rawkernel_unsplit.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
@@ -46,38 +94,6 @@
             "env": {"NUMBA_ENABLE_CUDASIM": "0"}
         },
         {
-            "name": "Ponto CPU-broadcast",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_cpu_broadcast.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
-            "name": "Ponto CPU-conv",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_cpu_conv.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
-            "name": "Ponto CPU-broadcast-unsplit",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_cpu_broadcast_unsplit.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
-            "name": "Ponto CuPy-rawkernel-unsplit",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_cupy_rawkernel_unsplit.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
             "name": "Ponto Numba-unsplit",
             "type": "debugpy",
             "request": "launch",
@@ -85,38 +101,6 @@
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json",
             "env": {"NUMBA_ENABLE_CUDASIM": "0"}
-        },
-        {
-            "name": "Ponto CPU-conv-unsplit",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_cpu_conv_unsplit.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
-            "name": "Ponto CuPy-conv-unsplit",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_cupy_conv_unsplit.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
-            "name": "Ponto CuPy-cuda-unsplit",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_cupy_cuda_unsplit.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
-            "name": "Ponto WebGPU-unsplit",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_webgpu_unsplit.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
         {
             "name": "Ponto Pytorch-conv-split",
@@ -135,6 +119,14 @@
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
         {
+            "name": "Ponto Taichi-GAG",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi_gag.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto_sem_plots.json"
+        },
+        {
             "name": "Ponto Taichi-split",
             "type": "debugpy",
             "request": "launch",
@@ -142,5 +134,21 @@
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
+        {
+            "name": "Ponto WebGPU",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_webgpu.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto WebGPU-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_webgpu_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        }
     ]
 }

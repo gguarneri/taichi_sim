@@ -96,7 +96,8 @@ void pressure_second_der_kernel(
         float *mdpxx_dx, float *mdpyy_dy,
         float *a_x, float *b_x, float *k_x,
         float *a_y, float *b_y, float *k_y,
-        float *coefs, int *idx_fd,
+        float *coefs, int *idx_fd, float *source_term, int *idx_src_gpu, int it, int nt, int n_pto_src,
+        float *p_2, float *sens_pressure, int *idx_sen_gpu, int *delay_rec, int n_pto_rec,
         float dt, float one_dx, float one_dy, int nx, int ny, int _ord)
     {
         const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -116,6 +117,7 @@ void pressure_second_der_kernel(
         if(x >= id_x_i && x < id_x_f && y >= id_y_i && y < id_y_f) {
             float vdpxx_dx = 0.f;
             float vdpyy_dy = 0.f;
+            float pressure_new = 0.0f;
 
             for (int c = (_ord * 2) - 1; c > -1; --c) {
                 int off = (_ord - 1) - c;
@@ -135,33 +137,34 @@ void pressure_second_der_kernel(
             vdpyy_dy = vdpyy_dy / k_y[y - offset] + mdpyy_dy_new;
 
             // Atualiza o campo de pressao futuro a partir do passado e do presente
-            press_ft[idx] = 2.0 * press_pr[idx] - press_past[idx] + dt*dt * (vdpxx_dx + vdpyy_dy) * kappa[idx];
+            pressure_new = 2.0 * press_pr[idx] - press_past[idx] + dt*dt * (vdpxx_dx + vdpyy_dy) * kappa[idx];
+
+            // Adiciona o sinal de fonte, se o pixel fizer parte de uma fonte
+            const int idx_src = idx_src_gpu[idx];
+            if (idx_src != -1) {
+                const int idx_source_term = xy(it - 1, idx_src, nt, n_pto_src);
+                pressure_new += source_term[idx_source_term] * dt * dt * one_dx * one_dy;
+            }
+            press_ft[idx] = pressure_new;
         }
-    }
-
-
-    extern "C" __global__
-    void dirichlet_boundary_kernel(float *press_past, float *press_pr, float *press_ft,
-                                   int *idx_fd, int nx, int ny, int _ord) {
-        const int x = blockIdx.x * blockDim.x + threadIdx.x;
-        const int y = blockIdx.y * blockDim.y + threadIdx.y;
-        
-        const int last = _ord - 1;
-        const int offset = _ord - 1;
-        const int id_x_i = -idx_fd[ij(last, 2, _ord, 4)];
-        const int id_x_f = nx - idx_fd[ij(last, 0, _ord, 4)];
-        const int id_y_i = -idx_fd[ij(last, 2, _ord, 4)];
-        const int id_y_f = ny - idx_fd[ij(last, 0, _ord, 4)];
-        const int idx = xy(x, y, nx, ny);
-
-        if(idx == -1)
-            return;
-
-        if(x < id_x_i || x > id_x_f || y < id_y_i || y > id_y_f) {
-            press_ft[idx] = 0.0f;
+        else {
+            // Condicao de contorno Dirichlet (p = 0) nas bordas
+            press_ft[idx] = 0.0f; 
         }
 
         // Swap dos valores novos de pressao para valores antigos
         press_past[idx] = press_pr[idx];
         press_pr[idx] = press_ft[idx];
+
+        // Calcula a norma L2 da pressao
+        float p_2_old = p_2[0];
+        float p_2_new = abs(press_pr[idx]);
+        p_2[0] = p_2_old < p_2_new ? p_2_new : p_2_old;
+                
+        // Armazena o sinal do sensor, se o pixel fizer parte de um receptor
+        const int idx_sen = idx_sen_gpu[idx];
+        if(idx_sen != -1 and it >= delay_rec[idx_sen]) {
+            const int sample = xy(it - 1, idx_sen, nt, n_pto_rec);
+            sens_pressure[sample] += press_pr[idx];
+        }
     }
