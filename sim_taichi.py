@@ -232,6 +232,7 @@ class SimulatorTaichiStaggered(Simulator):
                 if all(xyz == xyz_r[nr]):
                     receiver[nt, nr] = p[xyz]
 
+
         @ti.kernel
         def update_p(nt: int):
             for xyz in ti.grouped(p):
