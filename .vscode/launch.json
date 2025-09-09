@@ -5,6 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: Attach using Process Id",
+            "type": "debugpy",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        },
+        {
             "name": "Ponto CPU-broadcast",
             "type": "debugpy",
             "request": "launch",
@@ -91,7 +97,9 @@
             "program": "${workspaceFolder}/sim_numba.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json",
-            "env": {"NUMBA_ENABLE_CUDASIM": "0"}
+            "env": {
+                "NUMBA_ENABLE_CUDASIM": "0"
+            }
         },
         {
             "name": "Ponto Numba-unsplit",
@@ -100,7 +108,9 @@
             "program": "${workspaceFolder}/sim_numba_unsplit.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json",
-            "env": {"NUMBA_ENABLE_CUDASIM": "0"}
+            "env": {
+                "NUMBA_ENABLE_CUDASIM": "0"
+            }
         },
         {
             "name": "Ponto Pytorch-conv-split",
@@ -124,13 +134,29 @@
             "request": "launch",
             "program": "${workspaceFolder}/sim_taichi_gag.py",
             "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto_sem_plots.json"
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
         {
             "name": "Ponto Taichi-split",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/sim_taichi.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto Taichi-unsplit",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi_unsplit.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Ponto Taichi-unsplit-yao2018",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi_unsplit_yao2018.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
