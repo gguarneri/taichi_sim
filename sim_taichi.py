@@ -11,269 +11,252 @@ from sim_support.simulator import Simulator
 # Importacao de pacotes especificos para a implementacao do simulador
 # ======================
 import taichi as ti
-import matplotlib.pyplot as plt
+
 
 # -----------------------------------------------------------------------------
 # Aqui deve ser implementado o simulador como uma classe herdada de Simulator
 # -----------------------------------------------------------------------------
-class SimulatorTaichiStaggered(Simulator):
+class SimulatorTaichi(Simulator):
     def __init__(self, file_config):
         # Chama do construtor padrao, que le o arquivo de configuracao
-        super().__init__(file_config, sim_model="split")
-
+        super().__init__(file_config)
+        
         # Define o nome do simulador
-        self._name = "Taichi"
-
+        self._name = "Taichi-split"
+        
+        
     def implementation(self):
+        # ---------------------------------
+        # Implementacao do simulador
+        # ---------------------------------
         super().implementation()
-
+        
         # --------------------------------------------
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
+        # Inicializacao do framework
+        ti.init(arch=ti.gpu, debug=False, print_ir=False, kernel_profiler=False)
+        
+        # Transfere arrays de parametros para a GPU
+        a_x_gpu = ti.field(dtype=float, shape=self._a_x.flatten().shape)
+        a_x_gpu.from_numpy(self._a_x.flatten())
+        b_x_gpu = ti.field(dtype=float, shape=self._b_x.flatten().shape)
+        b_x_gpu.from_numpy(self._b_x.flatten())
+        k_x_gpu = ti.field(dtype=float, shape=self._k_x.flatten().shape)
+        k_x_gpu.from_numpy(self._k_x.flatten())
+        a_x_half_gpu = ti.field(dtype=float, shape=self._a_x_half.flatten().shape)
+        a_x_half_gpu.from_numpy(self._a_x_half.flatten())
+        b_x_half_gpu = ti.field(dtype=float, shape=self._b_x_half.flatten().shape)
+        b_x_half_gpu.from_numpy(self._b_x_half.flatten())
+        k_x_half_gpu = ti.field(dtype=float, shape=self._k_x_half.flatten().shape)
+        k_x_half_gpu.from_numpy(self._k_x_half.flatten())
+        
+        a_y_gpu = ti.field(dtype=float, shape=self._a_y.flatten().shape)
+        a_y_gpu.from_numpy(self._a_y.flatten())
+        b_y_gpu = ti.field(dtype=float, shape=self._b_y.flatten().shape)
+        b_y_gpu.from_numpy(self._b_y.flatten())
+        k_y_gpu = ti.field(dtype=float, shape=self._k_y.flatten().shape)
+        k_y_gpu.from_numpy(self._k_y.flatten())
+        a_y_half_gpu = ti.field(dtype=float, shape=self._a_y_half.flatten().shape)
+        a_y_half_gpu.from_numpy(self._a_y_half.flatten())
+        b_y_half_gpu = ti.field(dtype=float, shape=self._b_y_half.flatten().shape)
+        b_y_half_gpu.from_numpy(self._b_y_half.flatten())
+        k_y_half_gpu = ti.field(dtype=float, shape=self._k_y_half.flatten().shape)
+        k_y_half_gpu.from_numpy(self._k_y_half.flatten())
+        
+        rho_grid_vx_gpu = ti.field(dtype=float, shape=self._rho_grid_vx.shape)
+        rho_grid_vx_gpu.from_numpy(self._rho_grid_vx)
+        rho_grid_vy_gpu = ti.field(dtype=float, shape=self._rho_grid_vy.shape)
+        rho_grid_vy_gpu.from_numpy(self._rho_grid_vy)
+        coefs_gpu = ti.field(dtype=float, shape=self._coefs.shape)
+        coefs_gpu.from_numpy(self._coefs)
+        
+        # Arrays para as variaveis de memoria do calculo
+        memory_dvx_dx_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
+        memory_dvy_dy_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
+        memory_dpressure_dx_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
+        memory_dpressure_dy_gpu = ti.field(dtype=float, shape = (self._nx, self._ny))
 
-        ti.init(arch=ti.gpu, default_fp=ti.f32, default_ip=ti.i32)
+        # Arrays dos campos de velocidade e pressoes
+        vx_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
+        vy_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
+        pressure_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
+        pressure_l2_norm_gpu = ti.field(dtype=float, shape=())
+        
+        # Arrays para os sensores
+        sens_pressure_gpu = ti.field(dtype=float, shape=(self._n_steps, self._n_rec))
+        delay_rec_gpu = ti.field(dtype=int, shape=self._delay_recv.shape)
+        delay_rec_gpu.from_numpy(self._delay_recv)
 
-        # Dimensions
-        try: Nxyz_np = (self._nx,); Nxyz_np += (self._ny,); Nxyz_np += (self._nz,)
-        except AttributeError: pass
-        Nd = len(Nxyz_np)  # Number of dimensions
-        Nxyz = ti.field(int, Nd)  # Dimensions in taichi field
-        Nxyz.from_numpy(np.array(Nxyz_np).astype(np.int32))
-
-        # Pressure and velocity fields
-        p = ti.field(float, Nxyz_np)
-        v = [ti.field(float, Nxyz_np) for _ in range(Nd)]
-
-        # Coordinates of sources
-        try: xyz_s = (self._ix_src,); xyz_s += (self._iy_src,); xyz_s += (self._iz_src,)
-        except AttributeError: pass
-
-        # Coordinates of receivers
-        try: xyz_r = (self._ix_rec,); xyz_r += (self._iy_rec,); xyz_r += (self._iz_rec,)
-        except AttributeError: pass
-
-        # Adjusting shape
-        xyz_s = tuple(tuple(i) for i in np.array(xyz_s).T)
-        xyz_r = tuple(tuple(i) for i in np.array(xyz_r).T)
-
-        # Sources and receivers signals in taichi fields
-        if self._source_term.ndim == 1:
-            self._source_term = self._source_term[np.newaxis]
-        source = [ti.field(float, self._n_steps) for _ in range(self._n_src)]
-        for ns in range(self._n_src):
-            dp = self._source_term[ns] * self._dt * self._one_dx * self._one_dy
-            source[ns].from_numpy(dp.astype(np.float32))
-        receiver = ti.field(float, (self._n_steps, self._n_rec))
-
-        # Absorbing Boundary Conditions (ABC)
-        try:  # TODO: reavaliar ordem xyz, xzy, etc
-            Nabc_np = ((self._roi._pml_xmax_len, self._roi._pml_xmin_len),)
-            Nabc_np += ((self._roi._pml_zmax_len, self._roi._pml_zmin_len),)
-            Nabc_np += ((self._roi._pml_ymax_len, self._roi._pml_ymin_len),)
-        except AttributeError: pass
-        Nabc = ti.field(int, (3, 2))
-        Nabc.from_numpy(np.array(Nabc_np).astype(np.int32))
-
-        # Convolutional Perfect Matched Layer (C-PML)
-        # Auxiliary variables
-        psi_p = []
-        psi_v = []
-        for nd in range(Nd):
-            Npml = list(Nxyz_np)
-            Npml[nd] = Nabc_np[nd][0] + Nabc_np[nd][1]
-            psi_p.append(ti.field(float, Npml))
-            psi_v.append(ti.field(float, Npml))
-
-        # C-PML coefficients (to be used with forward operator)
-        bf = ti.field(float, np.max(Nabc_np))
-        bf.from_numpy(self._b_x[:Nabc_np[0][0], 0])
-        af = ti.field(float, np.max(Nabc_np))
-        af.from_numpy(self._a_x[:Nabc_np[0][0], 0])
-        kf = ti.field(float, np.max(Nabc_np))
-        kf.from_numpy(self._k_x[:Nabc_np[0][0], 0])
-
-        # C-PML coefficients (to be used with backward operator)
-        bh = ti.field(float, np.max(Nabc_np))
-        bh.from_numpy(self._b_x_half[:Nabc_np[0][0], 0])
-        ah = ti.field(float, np.max(Nabc_np))
-        ah.from_numpy(self._a_x_half[:Nabc_np[0][0], 0])
-        kh = ti.field(float, np.max(Nabc_np))
-        kh.from_numpy(self._k_x_half[:Nabc_np[0][0], 0])
-
-        # Filling fields with zeros
-        p.fill(0.)
-        for nd in range(Nd):
-            v[nd].fill(0.)
-            psi_p[nd].fill(0.)
-            psi_v[nd].fill(0.)
-
-        # @ti.kernel
-        # def zero_boundaries(prmtr: ti.template()):
-        #     for xyz in ti.grouped(prmtr):
-        #         cond = False
-        #         for nd in ti.static(range(Nd)):
-        #             cond = cond or xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc
-        #         if cond:
-        #             prmtr[xyz] = 0.
-
-        # Bulk modulus in taichi field
-        K = ti.field(float, Nxyz_np)
-        # K.fill(self._cp**2 * self._rho * self._dt / self._dx)
-        K.from_numpy(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx * self._dt / self._dx)
-        # zero_boundaries(K)
-
-        # Inverse of density in taichi field
-        rho_inv = [ti.field(float, Nxyz_np) for _ in range(Nd)]
-        # rho_inv_x.fill(self._dt / (self._rho * self._dx))
-        rho_inv[0].from_numpy(self._dt / (self._rho_grid_vx * self._dx))
-        rho_inv[1].from_numpy(self._dt / (self._rho_grid_vy * self._dy))
-        # zero_boundaries(rho_inv[0])
-        # zero_boundaries(rho_inv[1])
-
-        @ti.func
-        def D(u: ti.template(), xyz, nd: int, bf: int, imax: int): # type: ignore
-            """
-            Derivative operator
-
-            Parameters
-            ----------
-            u: field
-            xyz: coordinate
-            nd: dimension
-            bf: backward (0) or forward (1)
-            imax: maximum index
-
-            Returns
-            -------
-            d: derivative of field
-            """
-            d = 0.
-            # imax = u.shape[nd[0]]
-            for nc in ti.static(range(self._deriv_acc)):
-                # # Solution 1: 30 s
-                # xyz_p = xyz[:]
-                # xyz_n = xyz[:]
-                # xyz_p[nd] += nc + bf
-                # xyz_n[nd] -= nc - bf + 1
-                # a = u[xyz_p] if xyz_p[nd] < imax else 0
-                # b = u[xyz_n] if xyz_n[nd] >= 0 else 0
-                # d += ti.static(self._coefs[nc]) * (a - b)
-
-                # # Solution 2: 29.6 s
-                # xyz_tmp = xyz[:]
-                # xyz_tmp[nd] += nc + bf
-                # a = u[xyz_tmp] if xyz_tmp[nd] < imax else 0
-                # xyz_tmp[nd] += - 2 * nc - 1
-                # b = u[xyz_tmp] if xyz_tmp[nd] >= 0 else 0
-                # d += ti.static(self._coefs[nc]) * (a - b)
-
-                # c = u.shape[0]
-                # ti.static_print(nd)
-                # c = c[ti.static(nd)]
-
-                # Solution 3: 29.7 s
-                xyz[nd] += nc + bf
-                a = u[xyz] if xyz[nd] < imax else 0
-                xyz[nd] += - 2 * nc - 1
-                b = u[xyz] if xyz[nd] >= 0 else 0
-                xyz[nd] += nc + 1 - bf
-                d += ti.static(self._coefs[nc]) * (a - b)
-
-            return d
-
-        @ti.func
-        def cpml_(d, psi, xyz, nd: int, nabc): #, al, bl, kl, ar, br, kr):
-            r = d
-            if xyz[nd] < Nabc[nd, 0]:
-                i = xyz[nd]
-                if nabc:
-                    psi[xyz] = bf[i] * psi[xyz] + af[i] * d
-                    r = r / kf[i] + psi[xyz]
-                else:
-                    psi[xyz] = bh[i] * psi[xyz] + ah[i] * d
-                    r = r / kh[i] + psi[xyz]
-
-            elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
-                xyz_r = xyz[:]
-                xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
-                i = Nxyz[nd] - xyz[nd] - 1
-                if nabc:
-                    psi[xyz_r] = bh[i] * psi[xyz_r] + ah[i] * d
-                    r = r / kh[i] + psi[xyz_r]
-                else:
-                    psi[xyz_r] = bf[i] * psi[xyz_r] + af[i] * d
-                    r = r / kf[i] + psi[xyz_r]
-            return r
-
-        @ti.func
-        def cpml(d, psi, xyz, nd: int, ar, br, kr, al, bl, kl):
-            r = d
-            if xyz[nd] < Nabc[nd, 0]:
-                i = xyz[nd]
-                psi[xyz] = bl[i] * psi[xyz] + al[i] * d
-                r = r / kl[i] + psi[xyz]
-            elif xyz[nd] > Nxyz[nd] - Nabc[nd, 1] - 1:
-                xyz_r = xyz[:]
-                xyz_r[nd] += Nabc[nd, 1] - Nxyz[nd] + Nabc[nd, 0]
-                i = Nxyz[nd] - xyz[nd] - 1
-                psi[xyz_r] = br[i] * psi[xyz_r] + ar[i] * d
-                r = r / kr[i] + psi[xyz_r]
-            return r
-
-        @ti.func
-        def add_source(p, xyz, nt: int):
-            for ns in ti.static(range(self._n_src)):
-                if all(xyz == xyz_s[ns]):
-                    p[xyz] += source[ns][nt]
-
-        @ti.func
-        def read_sensors(p, xyz, nt: int):
-            for nr in ti.static(range(self._n_rec)):
-                if all(xyz == xyz_r[nr]):
-                    receiver[nt, nr] = p[xyz]
-
-
-        @ti.kernel
-        def update_p(nt: int):
-            for xyz in ti.grouped(p):
-                for nd in ti.static(range(Nd)):
-                    d = D(v[nd], xyz, nd, 1, v[nd].shape[nd])
-                    # p[xyz] -= K[xyz] * cpml_(d, psi_v[nd], xyz, nd, 0)
-                    p[xyz] -= K[xyz] * cpml(d, psi_v[nd], xyz, nd, af, bf, kf, ah, bh, kh)
-                add_source(p, xyz, nt)
-                read_sensors(p, xyz, nt)
-
-        @ti.kernel
-        def update_v():
-            for xyz in ti.grouped(p):
-                for nd in ti.static(range(Nd)):
-                    d = D(p, xyz, nd, 0, p.shape[nd])
-                    # v[nd][xyz] -= rho_inv[nd][xyz] * cpml_(d, psi_p[nd], xyz, nd, 1)
-                    v[nd][xyz] -= rho_inv[nd][xyz] * cpml(d, psi_p[nd], xyz, nd, ah, bh, kh, af, bf, kf)
-                    # Dirichlet
-                    # if xyz[nd] < self._deriv_acc - 1 or xyz[nd] > Nxyz[nd] - self._deriv_acc:
-                    #     v[nd][xyz] = 0.
+        # Calculo dos indices para o staggered grid
+        ord = self._deriv_acc
+        idx_fd = np.array([[c + 1, c, -c, -c - 1] for c in range(ord)], dtype=int32)
+        idx_fd_gpu = ti.field(dtype=int, shape=idx_fd.shape)
+        idx_fd_gpu.from_numpy(idx_fd)
 
         # Definicao dos limites para a plotagem dos campos
-        def show_anim_func(nt: int, u):
-            if not nt % self._it_display:
-                # TODO: reavaliar xyz
-                u_np = u.to_numpy()[
-                    self._roi.get_ix_min():self._roi.get_ix_max(), self._roi.get_iz_min():self._roi.get_iz_max()]
-                self._windows_gpu[0].imv.setImage(u_np, levels=[self._min_val_fields, self._max_val_fields])
-                self._app.processEvents()
+        ix_min = self._roi.get_ix_min()
+        ix_max = self._roi.get_ix_max()
+        iy_min = self._roi.get_iz_min()
+        iy_max = self._roi.get_iz_max()
 
-        t_init = time()
-        for nt in range(self._n_steps):
-            update_p(nt)
-            update_v()
-            if self._show_anim:
-                show_anim_func(nt, p)
-        sim_time = time() - t_init
+        # Inicializa os mapas dos parametros de Lame
+        kappa_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
+        kappa_gpu.from_numpy(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx)
 
-        # "vx": vx, "vy": vy, "sens_vx": sens_vx, "sens_vy": sens_vy
-        return {"sim_time": sim_time, "gpu_str": str(ti.lang.impl.current_cfg().arch),
-                "sens_pressure": receiver.to_numpy(), "pressure": p.to_numpy()}
+        # Acrescenta eixo se source_term for array unidimensional
+        if self._n_pto_src == 1:
+            source_term = self._source_term[:, np.newaxis]
+        source_term_gpu = ti.field(dtype=float, shape=source_term.shape)
+        source_term_gpu.from_numpy(source_term)
+        
+        # Arrays com as informacoes sobre os elementos emissores (sources) e receptores (sensors)
+        idx_src_gpu = ti.field(dtype=int, shape=self._pos_sources.shape)
+        idx_src_gpu.from_numpy(self._pos_sources)
+        idx_sen_gpu = ti.field(dtype=int, shape=self._pos_sensors.shape)
+        idx_sen_gpu.from_numpy(self._pos_sensors)
+        
+        # ---------------------------------
+        # Definicao das funcoes de kernel
+        # ---------------------------------
+        # Pressao
+        @ti.kernel
+        def pressure_kernel(dt: float, one_dx: float, one_dy: float, nx: int, ny: int, ord: int, it: int):
+            for x, y in pressure_gpu:
+                last = ord - 1
+                offset = ord - 1
+                i_dix = -idx_fd_gpu[last, 2]
+                i_dfx = nx - idx_fd_gpu[last, 0]
+                i_diy = -idx_fd_gpu[last, 3]
+                i_dfy = ny - idx_fd_gpu[last, 1]
+
+                # Pressure
+                pressure_l2_norm_gpu[None] = 0.0
+                if(x >= i_dix and x < i_dfx and y >= i_diy and y < i_dfy):
+                    vdvx_dx = 0.0
+                    vdvy_dy = 0.0
+                    for c in range(0, ord):
+                        vdvx_dx += coefs_gpu[c] * (vx_gpu[x + idx_fd_gpu[c, 0], y] - 
+                                                   vx_gpu[x + idx_fd_gpu[c, 2], y]) * one_dx
+                        vdvy_dy += coefs_gpu[c] * (vy_gpu[x, y + idx_fd_gpu[c, 1]] - 
+                                                   vy_gpu[x, y + idx_fd_gpu[c, 3]]) * one_dy
+
+                    mdvx_dx_new = b_x_half_gpu[x - offset] * memory_dvx_dx_gpu[x, y] + a_x_half_gpu[x - offset] * vdvx_dx
+                    mdvy_dy_new = b_y_gpu[y - offset] * memory_dvy_dy_gpu[x, y] + a_y_gpu[y - offset] * vdvy_dy
+
+                    vdvx_dx = vdvx_dx/k_x_half_gpu[x - offset] + mdvx_dx_new
+                    vdvy_dy = vdvy_dy/k_y_gpu[y - offset]  + mdvy_dy_new
+
+                    memory_dvx_dx_gpu[x, y] = mdvx_dx_new
+                    memory_dvy_dy_gpu[x, y] = mdvy_dy_new
+
+                    pressure_gpu[x, y] += kappa_gpu[x, y]*(vdvx_dx + vdvy_dy) * dt
+                    
+                # Adiciona o sinal de fonte, se o pixel fizer parte de uma fonte
+                idx_src = idx_src_gpu[x, y]
+                if idx_src != -1:
+                    pressure_gpu[x, y] += source_term_gpu[it - 1, idx_src] * dt * one_dx * one_dy
+        
+        # Velocidades
+        @ti.kernel
+        def velocity_kernel(dt: float, one_dx: float, one_dy: float, nx: int, ny: int, ord: int, it: int):
+            for x, y in pressure_gpu:
+                last = ord - 1
+                offset = ord - 1
+                i_dix = -idx_fd_gpu[last, 3]
+                i_dfx = nx - idx_fd_gpu[last, 1]
+                i_diy = -idx_fd_gpu[last, 3]
+                i_dfy = ny - idx_fd_gpu[last, 1]
+                p_2_old = pressure_l2_norm_gpu[None]
+                
+                # Velocidade Vx
+                if(x >= i_dix and x < i_dfx and y >= i_diy and y < i_dfy):
+                    dpressure_dx = 0.0
+                    for c in range(0, ord):
+                        dpressure_dx += coefs_gpu[c] * (pressure_gpu[x + idx_fd_gpu[c, 1], y] - 
+                                                        pressure_gpu[x + idx_fd_gpu[c, 3], y]) * one_dx
+
+                    mdpressure_dx_new = b_x_gpu[x - offset] * memory_dpressure_dx_gpu[x, y] + a_x_gpu[x - offset] * dpressure_dx
+                    dpressure_dx = dpressure_dx / k_x_gpu[x - offset] + mdpressure_dx_new
+                    memory_dpressure_dx_gpu[x, y] = mdpressure_dx_new
+
+                    vx_gpu[x, y] += dt * (dpressure_dx / rho_grid_vx_gpu[x, y])
+                else:
+                    # Condicao de Dirichlet
+                    vx_gpu[x, y] = 0.0
+                
+                # Velocidade Vy
+                i_dix = -idx_fd_gpu[last, 2]
+                i_dfx = nx - idx_fd_gpu[last, 0]
+                i_diy = -idx_fd_gpu[last, 2]
+                i_dfy = ny - idx_fd_gpu[last, 0]
+                
+                if(x >= i_dix and x < i_dfx and y >= i_diy and y < i_dfy):
+                    dpressure_dy = 0.0
+                    for c in range(0, ord):
+                        dpressure_dy += coefs_gpu[c] * (pressure_gpu[x, y + idx_fd_gpu[c, 0]] - 
+                                                        pressure_gpu[x, y + idx_fd_gpu[c, 2]]) * one_dy
+
+                    mdpressure_dy_new = b_y_half_gpu[y - offset] * memory_dpressure_dy_gpu[x, y] + a_y_half_gpu[y - offset] * dpressure_dy
+                    dpressure_dy = dpressure_dy / k_y_half_gpu[y - offset] + mdpressure_dy_new
+                    memory_dpressure_dy_gpu[x, y] = mdpressure_dy_new
+
+                    vy_gpu[x, y] += dt * (dpressure_dy / rho_grid_vy_gpu[x, y])
+                else:
+                    # Condicao de Dirichlet
+                    vy_gpu[x, y] = 0.0
+                    
+                # Calcula a norma L2 da pressao
+                p_2_new = ti.abs(pressure_gpu[x, y])
+                pressure_l2_norm_gpu[None] = p_2_old if p_2_old > p_2_new else p_2_new
+                
+                # Armazena o sinal do sensor, se o pixel fizer parte de um receptor
+                sensor = idx_sen_gpu[x, y]
+                if sensor != -1 and it >= delay_rec_gpu[sensor]:
+                    sens_pressure_gpu[it - 1, sensor] += pressure_gpu[x, y]
+              
+        # Laco de tempo para execucao da simulacao
+        t_gpu = time()
+        for it in range(1, self._n_steps + 1):
+            # Calculo da pressao
+            pressure_kernel(self._dt, self._one_dx, self._one_dy, self._nx, self._ny, ord, it)
+                  
+            # Calculo das velocidades
+            velocity_kernel(self._dt, self._one_dx, self._one_dy, self._nx, self._ny, ord, it)
+            
+            psn2 = pressure_l2_norm_gpu[None]
+            if (it % self._it_display) == 0 or it == 5:
+                if self._show_debug:
+                    print(f'Time step # {it} out of {self._n_steps}')
+                    print(f'Max pressure = {psn2}')
+
+                if self._show_anim:
+                    self._windows_gpu[0].imv.setImage(pressure_gpu.to_numpy()[ix_min:ix_max, iy_min:iy_max],
+                                                      levels=[self._min_val_fields, self._max_val_fields])
+                    self._app.processEvents()
+
+            # Verifica a estabilidade da simulacao
+            if psn2 > STABILITY_THRESHOLD:
+                raise StabilityError("Simulacao tornando-se instavel", psn2)
+                
+        sim_time = time() - t_gpu
+
+        # Pega os resultados da simulacao
+        pressure = pressure_gpu.to_numpy()
+        sens_pressure = sens_pressure_gpu.to_numpy()
+        
+        # --------------------------------------------
+        # A funcao de implementacao do simulador deve retornar
+        # um dicionario com as seguintes chaves:
+        #   - "pressure": campo de pressao
+        #   - "sens_pressure": sinais da pressao nos sensores
+        #   - "gpu_str": string de identificacao da GPU utilizada na simulacao
+        #   - "sim_time": tempo da simulacao, medido com a funcao time()
+        #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
+        # --------------------------------------------
+        return {"pressure": pressure, "sens_pressure": sens_pressure,
+                "gpu_str": ti.lang.impl.current_cfg().arch.name, "sim_time": sim_time}
+
 
 # ----------------------------------------------------------
 # Avaliacao dos parametros na linha de comando
@@ -283,16 +266,14 @@ parser.add_argument('-c', '--config', help='Configuration file', default='config
 args = parser.parse_args()
 
 # Cria a instancia do simulador
-sim_instance = SimulatorTaichiStaggered(args.config)
+sim_instance = SimulatorTaichi(args.config)
 
-#%% Executa simulacao
+# Executa simulacao
 try:
     sim_instance.run()
-    plt.show()
-    # pass
 
 except KeyError as key:
     print(f"Chave {key} nao encontrada no arquivo de configuracao.")
-
+    
 except ValueError as value:
     print(value)

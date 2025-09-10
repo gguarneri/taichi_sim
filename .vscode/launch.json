@@ -129,14 +129,6 @@
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
         {
-            "name": "Ponto Taichi-GAG",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_taichi_gag.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
             "name": "Ponto Taichi-split",
             "type": "debugpy",
             "request": "launch",
@@ -149,14 +141,6 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/sim_taichi_unsplit.py",
-            "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
-        },
-        {
-            "name": "Ponto Taichi-unsplit-yao2018",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/sim_taichi_unsplit_yao2018.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
         },
