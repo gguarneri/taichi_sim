@@ -225,7 +225,7 @@ __marimo__/
 
 # simulators analisys tests
 analise_completa
-ensaios
+ensaios/ponto/results
 images
 nsys_data
 smi_data
