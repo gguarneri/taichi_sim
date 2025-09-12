@@ -6,13 +6,12 @@ import sys
 import os
 import re
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
 env = os.environ.copy()
 env["PYTHONPATH"] = os.pathsep.join(sys.path)
 
 config_file_path = os.path.join('.', 'ensaios', 'ponto', 'ponto_sem_plots.json')
-
+temp_json = os.path.join('.', 'ensaios', 'ponto', 'ponto_temp.json')
 
 with open(config_file_path, 'r') as f:
     data = json.load(f)
@@ -21,17 +20,17 @@ courant = 0.5
 base_grid = 500
 vel = data["specimen_params"]["cp"]
 
-data["simul_configs"]["n_iter"] = 1
+data["simul_configs"]["n_iter"] = 25
 data["simul_configs"]["save_results"] = 0
 data["simul_configs"]["show_anim"] = 0
 
 files = [f for f in glob.glob("sim_*.py") if not os.path.basename(f).startswith("sim_cpu_")]
 
 num_files = len(files)
-colors = cm.get_cmap('tab20', num_files)
+colors = plt.get_cmap('tab20', num_files)
 
 plt.figure(figsize=(16, 9))
-xrange = np.arange(1, 21)
+xrange = np.arange(1, 11)
 x_ticks = xrange * base_grid
 
 for idx, file in enumerate(files):
@@ -58,7 +57,7 @@ for idx, file in enumerate(files):
 
         data["simul_params"]["dt"] = courant / (np.sqrt(one_dx ** 2 + one_dx ** 2) * vel)
 
-        with open(r".\ensaios\ponto\ponto_temp.json", 'w') as f:
+        with open(temp_json, 'w') as f:
             json.dump(data, f)
 
         print("Running: ", file)
@@ -69,7 +68,7 @@ for idx, file in enumerate(files):
                 sys.executable,
                 file,
                 "-c",
-                r".\ensaios\ponto\ponto_temp.json"
+                temp_json
             ],
             capture_output=True,
             text=True,
@@ -79,7 +78,7 @@ for idx, file in enumerate(files):
         print("STDOUT:\n", resultado.stdout)
         print("STDERR:\n", resultado.stderr)
 
-        tempo_medio_match = re.search(r"([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)s", resultado.stdout)
+        tempo_medio_match = re.search(r"Tempo medio total \(inclui transferencia de dados\):\s*([\d\.]+)s", resultado.stdout)
 
         mean_time = float(tempo_medio_match.group(1)) if tempo_medio_match else None
 

@@ -49,6 +49,7 @@ class Simulator:
         self._n_steps = self._configs.get("simul_params", 1000).get("time_steps", 1000)
         self._dt = flt32(self._configs.get("simul_params", 1.0).get("dt", 1.0))
         self._it_display = self._configs.get("simul_params", 10).get("it_display", 10)
+        self.cpml_time = self._configs.get("simul_params", 1000).get("cpml_time", 1000)
 
         # Configuracao do corpo de prova
         self._cp = flt32(self._configs.get("specimen_params", 5.9).get("cp", 5.9))  # [mm/us]
@@ -312,6 +313,14 @@ class Simulator:
                 result_dir = self._results_dir if hasattr(self, "_results_dir") else os.path.join(".")
                 name = os.path.join(result_dir, f'result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_law_{law}')
+
+                # Energia refletida pela borda CPML
+                reflected = results_dict["sens_pressure"][self._n_steps - self.cpml_time, :]
+                reflected_energy = (reflected**2).sum()*self._dt
+                print(f"Energia refletida (sensor): {reflected_energy:.2}")
+
+                reflected_energy_field = (results_dict["pressure"]**2).sum()*self._dx*self._dy
+                print(f"Energia ultimo frame: {reflected_energy_field:.2}")
                 
                 # Compara o resultado com a referencia (CPU-broadcast)
                 try:
@@ -459,6 +468,8 @@ class Simulator:
                 f.write(f'Tamanho da ROI: {self._nx}x{self._ny}\n')
                 f.write(f'GPU: {results_dict["gpu_str"]}\n')
                 f.write(f'Numero de simulacoes: {self._n_iter}\n')
+                f.write(f"Energia refletida (sensor): {reflected_energy:.2}\n")
+                f.write(f"Energia ultimo frame: {reflected_energy_field:.2}\n")
                 if "msg_impl" in results_dict:
                     f.write(results_dict["msg_impl"])
                 if self._n_iter > 5:
