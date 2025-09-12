@@ -60,8 +60,9 @@ axs[1].set_xticklabels(df_sorted['simulador'], rotation=45, ha='right')
 df_sorted = df.sort_values("mse_sensores")
 axs[2].bar(df_sorted['simulador'], df_sorted['mse_sensores'], yerr=df_sorted['mse_sensores_std'], capsize=5)
 axs[2].set_title("MSE médio dos sensores de pressão")
-axs[2].set_yscale('log')
 axs[2].set_xticklabels(df_sorted['simulador'], rotation=45, ha='right')
+
+plt.tight_layout()
 
 fig, axs = plt.subplots(1, 2, figsize=(18, 6))
 df_sorted = df.sort_values("energia_sensor")
