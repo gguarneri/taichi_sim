@@ -229,3 +229,6 @@ ensaios/ponto/results
 images
 nsys_data
 smi_data
+logs
+detailed_results.csv
+summary_gpu_memory_times.tsv
