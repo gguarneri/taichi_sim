@@ -631,32 +631,32 @@ class SimulationProbeLinearArray(SimulationProbe):
         # Se for um array, deve ter um valor para cada elemento.
         # Se for um nome de um arquivo 'law',
         if t0_emission is None:
-            self.t0_emission = np.zeros(num_elem, dtype=np.float32)
+            self._t0_emission = np.zeros(num_elem, dtype=np.float32)
         elif type(t0_emission) is np.float32 or type(t0_emission) is float:
-            self.t0_emission = np.ones(num_elem, dtype=np.float32) * np.float32(t0_emission)
+            self._t0_emission = np.ones(num_elem, dtype=np.float32) * np.float32(t0_emission)
         elif type(t0_emission) is list:
-            self.t0_emission = t0_emission
-            if len(self.t0_emission) < num_elem:
-                self.t0_emission += [0.0] * (num_elem - len(self.t0_emission))
-            elif len(self.t0_emission) > num_elem:
-                self.t0_emission = self.t0_emission[:num_elem]
-            self.t0_emission = np.array(self.t0_emission, dtype=np.float32)
+            self._t0_emission = t0_emission
+            if len(self._t0_emission) < num_elem:
+                self._t0_emission += [0.0] * (num_elem - len(self._t0_emission))
+            elif len(self._t0_emission) > num_elem:
+                self._t0_emission = self._t0_emission[:num_elem]
+            self._t0_emission = np.array(self._t0_emission, dtype=np.float32)
         else:
             raise ValueError("t0_emission must be either a float [numpy.float32] or a list of floats.")
 
         # Tempo de atraso para recepcao dos elementos. Se for um valor escalar, e assumido para todos os elementos.
         # Se for um array, deve ter um valor para cada elemento.
         if t0_reception is None:
-            self.t0_reception = np.zeros(num_elem, dtype=np.float32)
+            self._t0_reception = np.zeros(num_elem, dtype=np.float32)
         elif type(t0_reception) is np.float32 or type(t0_reception) is float:
-            self.t0_reception = np.ones(num_elem, dtype=np.float32) * np.float32(t0_reception)
+            self._t0_reception = np.ones(num_elem, dtype=np.float32) * np.float32(t0_reception)
         elif type(t0_reception) is list:
-            self.t0_reception = t0_reception
-            if len(self.t0_reception) < num_elem:
-                self.t0_reception += [0.0] * (num_elem - len(self.t0_reception))
-            elif len(self.t0_reception) > num_elem:
-                self.t0_reception = self.t0_reception[:num_elem]
-            self.t0_reception = np.array(self.t0_reception, dtype=np.float32)
+            self._t0_reception = t0_reception
+            if len(self._t0_reception) < num_elem:
+                self._t0_reception += [0.0] * (num_elem - len(self._t0_reception))
+            elif len(self._t0_reception) > num_elem:
+                self._t0_reception = self._t0_reception[:num_elem]
+            self._t0_reception = np.array(self._t0_reception, dtype=np.float32)
         else:
             raise ValueError("t0_reception must be either a float [numpy.float32] or a list of floats.")
 
@@ -672,7 +672,7 @@ class SimulationProbeLinearArray(SimulationProbe):
                                       freq=freq, bw=bw, gain=gain, pulse_type=pulse_type,
                                       tx_en=self.emitters[i],
                                       rx_en=self.receivers[i],
-                                      t0=np.float32(self.t0_emission[i]))
+                                      t0=np.float32(self._t0_emission[i]))
                           for i in range(num_elem)]
 
         # Parametros geometricos gerais do transdutor
@@ -824,7 +824,7 @@ class SimulationProbeLinearArray(SimulationProbe):
         t0_recp = list()
         for idx_e, e in enumerate(self.elem_list):
             if e.rx_en:
-                t0_recp.append(self.t0_reception[idx_e])
+                t0_recp.append(self._t0_reception[idx_e])
 
         return t0_recp
 
@@ -835,23 +835,23 @@ class SimulationProbeLinearArray(SimulationProbe):
         :return: None
         """
         if t0_emission is None:
-            self.t0_emission = np.zeros(self.num_elem, dtype=np.float32)
+            self._t0_emission = np.zeros(self.num_elem, dtype=np.float32)
         elif type(t0_emission) is np.float32 or type(t0_emission) is float:
-            self.t0_emission = np.ones(self.num_elem, dtype=np.float32) * np.float32(t0_emission)
+            self._t0_emission = np.ones(self.num_elem, dtype=np.float32) * np.float32(t0_emission)
         elif type(t0_emission) is list:
-            self.t0_emission = t0_emission
-            if len(self.t0_emission) < self.num_elem:
-                self.t0_emission += [0.0] * (self.num_elem - len(self.t0_emission))
-            elif len(self.t0_emission) > self.num_elem:
-                self.t0_emission = self.t0_emission[:self.num_elem]
-            self.t0_emission = np.array(self.t0_emission, dtype=np.float32)
+            self._t0_emission = t0_emission
+            if len(self._t0_emission) < self.num_elem:
+                self._t0_emission += [0.0] * (self.num_elem - len(self._t0_emission))
+            elif len(self._t0_emission) > self.num_elem:
+                self._t0_emission = self._t0_emission[:self.num_elem]
+            self._t0_emission = np.array(self._t0_emission, dtype=np.float32)
         elif type(t0_emission) is np.ndarray:
-            self.t0_emission = t0_emission
+            self._t0_emission = t0_emission
         else:
             raise ValueError("t0_emission must be either a float [numpy.float32] or a list of floats.")
 
         for idx_e, e in enumerate(self.elem_list):
-            e.t0 = self.t0_emission[idx_e]
+            e.t0 = self._t0_emission[idx_e]
 
 
 class SimulationProbePoint(SimulationProbe):
