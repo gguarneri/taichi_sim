@@ -15,7 +15,7 @@ from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray
         
 
 class Simulator:
-    def __init__(self, file_config, sim_model="split"):
+    def __init__(self, file_config, sim_model="split", sim_type= "acoustic"):
         self._app = None
         self._device = None
         self._name = "simulator"
@@ -111,7 +111,20 @@ class Simulator:
                 self._cp_grid_vx = self._cp_map
             else:
                 raise ValueError(f'cp_map shape {self._cp_map.shape} e incompativel com a ROI')
-            
+
+        # cs_grid_vx e a matriz das velocidades transversais no mesmo grid de vx
+        self._cs_grid_vx = np.ones((self._nx, self._ny), dtype=flt32) * self._cs
+        if hasattr(self, "_cs_map"):
+            if self._cs_map.shape[0] < self._nx and self._cs_map.shape[1] < self._ny:
+                self._cs_grid_vx[self._roi.get_ix_min(): self._roi.get_ix_max(),
+                self._roi.get_iz_min(): self._roi.get_iz_max()] = self._cs_map
+            elif self._cs_map.shape[0] > self._nx and self._cs_map.shape[1] > self._ny:
+                self._cs_grid_vx = self._cs_map[:self._nx, :self._ny]
+            elif self._cs_map.shape[0] == self._nx and self._cs_map.shape[1] == self._ny:
+                self._cs_grid_vx = self._cs_map
+            else:
+                raise ValueError(f'cs_map shape {self._cs_map.shape} e incompativel com a ROI')
+
         # Verifica a condicao de estabilidade de Courant
         # R. Courant et K. O. Friedrichs et H. Lewy (1928)
         cp_max = max(self._cp_grid_vx.max(), self._cp)
@@ -274,10 +287,18 @@ class Simulator:
 
             x_pos = 200 + np.arange(3) * (nx + 50)
             y_pos = 100 + np.arange(3) * (ny + 50)
-            windows_gpu_data = [
-                {"title": "Pressure", "geometry": (x_pos[0], y_pos[0],
-                                                self._roi.get_nx(), self._roi.get_nz())},
-            ]
+            if sim_type == "viscoelastic":
+                windows_gpu_data = [
+                    {"title": "Vx [GPU]", "geometry": (x_pos[0], y_pos[0],
+                                                       self._roi.get_nx(), self._roi.get_nz())},
+                    {"title": "Vy [GPU]", "geometry": (x_pos[1], y_pos[0],
+                                                       self._roi.get_nx(), self._roi.get_nz())},
+                ]
+            else:
+                windows_gpu_data = [
+                    {"title": "Pressure", "geometry": (x_pos[0], y_pos[0],
+                                                    self._roi.get_nx(), self._roi.get_nz())},
+                ]
             self._windows_gpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_gpu_data]
         else:
             self._app = None
