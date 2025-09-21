@@ -34,31 +34,9 @@
         "coord_center": [
           25.0,
           0.0,
-          0.1
-        ],
-        "emitters": "all",
-        "t0_emission": 1.5,
-        "receivers": "all",
-        "t0_reception": 0.0
-      }
-    },
-    {
-      "linear": {
-        "id": "probe02",
-        "num_elem": 64,
-        "dim_a": 0.42,
-        "dim_p": 10.0,
-        "inter_elem": 0.08,
-        "freq": 5.0,
-        "bw": 0.5,
-        "gain": 1e6,
-        "pulse_type": "gaussian",
-        "coord_center": [
-          25.0,
-          0.0,
           79.9
         ],
-        "emitters":  [
+        "emitters": [
           "False",
           "False",
           "False",
@@ -96,11 +74,33 @@
         "receivers": "all",
         "t0_reception": 0.0
       }
+    },
+    {
+      "linear": {
+        "id": "probe02",
+        "num_elem": 64,
+        "dim_a": 0.42,
+        "dim_p": 10.0,
+        "inter_elem": 0.08,
+        "freq": 5.0,
+        "bw": 0.5,
+        "gain": 1e6,
+        "pulse_type": "gaussian",
+        "coord_center": [
+          25.0,
+          0.0,
+          0.1
+        ],
+        "emitters": "all",
+        "t0_emission": 1.5,
+        "receivers": "all",
+        "t0_reception": 0.0
+      }
     }
   ],
   "simul_params":
   {
-    "time_steps": 30000,
+    "time_steps": 20000,
     "dt": 2e-3,
     "acc": 2,
     "it_display": 10
@@ -116,11 +116,11 @@
     "show_figs": 0,
     "plot_results": 0,
     "plot_sensors": 0,
-    "plot_bscan": 0,
+    "plot_bscan": 1,
     "save_results": 0,
     "save_sensors": 0,
     "save_field": 0,
-    "save_bscan": 0,
+    "save_bscan": 1,
     "save_sources": 0,
     "source_env": 0,
     "emission_laws": "./",

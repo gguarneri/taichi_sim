@@ -550,7 +550,7 @@ class SimulatorWebGPU(Simulator):
         #   - "sim_time": tempo da simulacao, medido com a funcao time()
         #   - opcionalmente pode ter uma mensagem exclusiva da implementacao em "msg_impl"
         # --------------------------------------------
-        return {"pressure": sigmayy, "sens_pressure": sens_sigmayy,
+        return {"stress": sigmayy, "sens_stress": sens_sigmayy,
                 "gpu_str": self._device.adapter.info["device"], "sim_time": sim_time}
 
 
