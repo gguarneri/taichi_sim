@@ -26,7 +26,6 @@ OUTPUT_DETAILED_CSV = "detailed_results.csv"
 
 os.makedirs(LOG_DIR, exist_ok=True)
 
-
 def list_simulators(pattern="sim_*.py"):
     files = sorted([f for f in glob.glob(pattern) if "sim_cpu_" not in os.path.basename(f)])
     return files

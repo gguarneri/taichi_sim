@@ -7,10 +7,10 @@
         0.0
       ]
     ],
-    "height": 3000,
-    "h_len": 3000,
-    "width": 3000,
-    "w_len": 3000,
+    "height": 5000,
+    "h_len": 5000,
+    "width": 5000,
+    "w_len": 5000,
     "depth": 0.0,
     "d_len": 1,
     "len_pml_xmin": 18,
