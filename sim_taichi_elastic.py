@@ -65,10 +65,10 @@ class SimulatorTaichi(Simulator):
 
         rho_grid_vx_gpu = ti.field(dtype=float, shape=self._rho_grid_vx.shape)
         rho_grid_vx_gpu.from_numpy(self._rho_grid_vx)
-        rho_grid_vy_gpu = ti.field(dtype=float, shape=self._rho_grid_vy.shape)
-        rho_grid_vy_gpu.from_numpy(self._rho_grid_vy)
         cp_grid_vx_gpu = ti.field(dtype=float, shape=self._cp_grid_vx.shape)
+        cp_grid_vx_gpu.from_numpy(self._cp_grid_vx)
         cs_grid_vx_gpu = ti.field(dtype=float, shape=self._cs_grid_vx.shape)
+        cs_grid_vx_gpu.from_numpy(self._cs_grid_vx)
         coefs_gpu = ti.field(dtype=float, shape=self._coefs.shape)
         coefs_gpu.from_numpy(self._coefs)
 
@@ -111,11 +111,7 @@ class SimulatorTaichi(Simulator):
         iy_min = self._roi.get_iz_min()
         iy_max = self._roi.get_iz_max()
 
-        # Inicializa os mapas dos parametros de Lame
-        kappa_gpu = ti.field(dtype=float, shape=(self._nx, self._ny))
-        kappa_gpu.from_numpy(self._rho_grid_vx * self._cp_grid_vx * self._cp_grid_vx)
-
-        source_term = self._source_term
+        source_term = self._source_term[:,:]
         source_term_gpu = ti.field(dtype=float, shape=source_term.shape)
         source_term_gpu.from_numpy(source_term)
 
@@ -133,7 +129,7 @@ class SimulatorTaichi(Simulator):
         # Estresse
         @ti.kernel
         def sigma_kernel(dt: float, one_dx: float, one_dy: float, nx: int, ny: int, ord: int, it: int):
-            for x, y in sigmayy_gpu:
+            for x, y in ti.ndrange(nx,ny):
                 last = ord - 1
                 offset = ord - 1
                 i_dix = -idx_fd_gpu[last, 2]
@@ -142,18 +138,15 @@ class SimulatorTaichi(Simulator):
                 i_dfy = ny - idx_fd_gpu[last, 1]
 
                 #Stress
-                v2_norm_gpu[None] = 0.0
+                #v2_norm_gpu[None] = 0.0
                 if (x >= i_dix and x < i_dfx and y >= i_diy and y < i_dfy):
                     vdvx_dx = 0.0
                     vdvy_dy = 0.0
                     for c in range(0, ord):
-                        vdvx_dx += coefs_gpu[c] * (vx_gpu[x + idx_fd_gpu[c, 0], y] -
-                                                   vx_gpu[x + idx_fd_gpu[c, 2], y]) * one_dx
-                        vdvy_dy += coefs_gpu[c] * (vy_gpu[x, y + idx_fd_gpu[c, 1]] -
-                                                   vy_gpu[x, y + idx_fd_gpu[c, 3]]) * one_dy
+                        vdvx_dx += coefs_gpu[c] * (vx_gpu[x + idx_fd_gpu[c, 0], y] - vx_gpu[x + idx_fd_gpu[c, 2], y]) * one_dx
+                        vdvy_dy += coefs_gpu[c] * (vy_gpu[x, y + idx_fd_gpu[c, 1]] - vy_gpu[x, y + idx_fd_gpu[c, 3]]) * one_dy
 
-                    mdvx_dx_new = b_x_half_gpu[x - offset] * memory_dvx_dx_gpu[x, y] + a_x_half_gpu[
-                        x - offset] * vdvx_dx
+                    mdvx_dx_new = b_x_half_gpu[x - offset] * memory_dvx_dx_gpu[x, y] + a_x_half_gpu[x - offset] * vdvx_dx
                     mdvy_dy_new = b_y_gpu[y - offset] * memory_dvy_dy_gpu[x, y] + a_y_gpu[y - offset] * vdvy_dy
 
                     vdvx_dx = vdvx_dx / k_x_half_gpu[x - offset] + mdvx_dx_new
@@ -162,17 +155,16 @@ class SimulatorTaichi(Simulator):
                     memory_dvx_dx_gpu[x, y] = mdvx_dx_new
                     memory_dvy_dy_gpu[x, y] = mdvy_dy_new
 
-                    rho_h_x = 0.5 * rho_grid_vx_gpu[x+1,y] + rho_grid_vx_gpu[x,y]
-                    cp_h_x = 0.5 * cp_grid_vx_gpu[x+1,y] + cp_grid_vx_gpu[x,y]
-                    cs_h_x_l = 0.5 * cs_grid_vx_gpu[x+1,y] + cs_grid_vx_gpu[x,y]
+                    rho_h_x = 0.5 * (rho_grid_vx_gpu[x+1,y] + rho_grid_vx_gpu[x,y])
+                    cp_h_x = 0.5 * (cp_grid_vx_gpu[x+1,y] + cp_grid_vx_gpu[x,y])
+                    cs_h_x_l = 0.5 * (cs_grid_vx_gpu[x+1,y] + cs_grid_vx_gpu[x,y])
                     cs_h_x_m = 0.0 if min(cs_grid_vx_gpu[x+1,y], cs_grid_vx_gpu[x,y]) == 0.0 else cs_h_x_l
                     lambda_gpu = rho_h_x * (cp_h_x * cp_h_x - 2.0 * cs_h_x_l * cs_h_x_l)
                     mu = rho_h_x * (cs_h_x_m * cs_h_x_m)
                     lambdaplus2mu = lambda_gpu + 2.0 * mu
-                    lambdaplusmu = lambda_gpu + mu
 
                     sigmaxx_gpu[x, y] += (lambdaplus2mu * vdvx_dx + lambda_gpu * vdvy_dy) * dt
-                    sigmayy_gpu[x,y] += (lambda_gpu * vdvx_dx + lambdaplusmu * vdvy_dy) * dt
+                    sigmayy_gpu[x,y] += (lambda_gpu * vdvx_dx + lambdaplus2mu * vdvy_dy) * dt
 
                 i_dix = -idx_fd_gpu[last, 3]
                 i_dfx = nx - idx_fd_gpu[last, 1]
@@ -182,12 +174,9 @@ class SimulatorTaichi(Simulator):
                     vdvy_dx = 0.0
                     vdvx_dy = 0.0
                     for c in range(0, ord):
-                        vdvy_dx += coefs_gpu[c] * (vx_gpu[x + idx_fd_gpu[c, 1], y] -
-                                                   vx_gpu[x + idx_fd_gpu[c, 3], y]) * one_dx
-                        vdvx_dy += coefs_gpu[c] * (vy_gpu[x, y + idx_fd_gpu[c, 0]] -
-                                                   vy_gpu[x, y + idx_fd_gpu[c, 2]]) * one_dy
-                    mdvy_dx_new = b_x_gpu[x - offset] * memory_dvy_dx_gpu[x, y] + a_x_gpu[
-                        x - offset] * vdvy_dx
+                        vdvy_dx += coefs_gpu[c] * (vy_gpu[x + idx_fd_gpu[c, 1], y] - vy_gpu[x + idx_fd_gpu[c, 3], y]) * one_dx
+                        vdvx_dy += coefs_gpu[c] * (vx_gpu[x, y + idx_fd_gpu[c, 0]] - vx_gpu[x, y + idx_fd_gpu[c, 2]]) * one_dy
+                    mdvy_dx_new = b_x_gpu[x - offset] * memory_dvy_dx_gpu[x, y] + a_x_gpu[x - offset] * vdvy_dx
                     mdvx_dy_new = b_y_half_gpu[y - offset] * memory_dvx_dy_gpu[x, y] + a_y_half_gpu[y - offset] * vdvx_dy
 
                     vdvy_dx = vdvy_dx / k_x_gpu[x - offset] + mdvy_dx_new
@@ -196,7 +185,7 @@ class SimulatorTaichi(Simulator):
                     memory_dvy_dx_gpu[x, y] = mdvy_dx_new
                     memory_dvx_dy_gpu[x, y] = mdvx_dy_new
 
-                    rho_h_y = 0.5 * (rho_grid_vy_gpu[x, y+1] + rho_grid_vy_gpu[x, y])
+                    rho_h_y = 0.5 * (rho_grid_vx_gpu[x, y+1] + rho_grid_vx_gpu[x, y])
                     cs_h_y = 0.0 if min(cs_grid_vx_gpu[x,y+1], cs_grid_vx_gpu[x,y]) == 0.0 else 0.5 * (cs_grid_vx_gpu[x,y+1] + cs_grid_vx_gpu[x,y])
                     mu = rho_h_y * (cs_h_y * cs_h_y)
 
@@ -205,7 +194,7 @@ class SimulatorTaichi(Simulator):
         # Velocidades
         @ti.kernel
         def velocity_kernel(dt: float, one_dx: float, one_dy: float, nx: int, ny: int, ord: int, it: int):
-            for x, y in sigmayy_gpu:
+            for x, y in ti.ndrange(nx, ny):
                 last = ord - 1
                 offset = ord - 1
                 i_dix = -idx_fd_gpu[last, 3]
@@ -219,17 +208,15 @@ class SimulatorTaichi(Simulator):
                     vdsigmaxx_dx = 0.0
                     vdsigmaxy_dy = 0.0
                     for c in range(0, ord):
-                        vdsigmaxx_dx += coefs_gpu[c] * (sigmaxx_gpu[x + idx_fd_gpu[c, 1], y] -
-                                                        sigmaxx_gpu[x + idx_fd_gpu[c, 3], y]) * one_dx
+                        vdsigmaxx_dx += coefs_gpu[c] * (sigmaxx_gpu[x + idx_fd_gpu[c, 1], y] - sigmaxx_gpu[x + idx_fd_gpu[c, 3], y]) * one_dx
 
-                        vdsigmaxy_dy += coefs_gpu[c] * (sigmaxy_gpu[x, y + idx_fd_gpu[c, 1]] -
-                                                        sigmaxy_gpu[x, y + idx_fd_gpu[c, 3]]) * one_dy
+                        vdsigmaxy_dy += coefs_gpu[c] * (sigmaxy_gpu[x, y + idx_fd_gpu[c, 1]] - sigmaxy_gpu[x, y + idx_fd_gpu[c, 3]]) * one_dy
 
                     mdsxx_dx_new = b_x_gpu[x - offset] * memory_dsigmaxx_dx_gpu[x, y] + a_x_gpu[x - offset] * vdsigmaxx_dx
                     mdsxy_dy_new = b_y_gpu[y - offset] * memory_dsigmaxy_dy_gpu[x, y] + a_y_gpu[y - offset] * vdsigmaxy_dy
 
                     vdsigmaxx_dx = vdsigmaxx_dx / k_x_gpu[x - offset] + mdsxx_dx_new
-                    vdsigmaxy_dy = vdsigmaxy_dy / k_x_gpu[y - offset] + mdsxy_dy_new
+                    vdsigmaxy_dy = vdsigmaxy_dy / k_y_gpu[y - offset] + mdsxy_dy_new
 
                     memory_dsigmaxx_dx_gpu[x, y] = mdsxx_dx_new
                     memory_dsigmaxy_dy_gpu[x, y] = mdsxy_dy_new
@@ -237,9 +224,9 @@ class SimulatorTaichi(Simulator):
                     if rho_grid_vx_gpu[x,y] > 0.0:
                         vx_gpu[x, y] += (vdsigmaxx_dx + vdsigmaxy_dy) * dt / rho_grid_vx_gpu[x,y]
 
-                else:
-                    # Condicao de Dirichlet
-                    vx_gpu[x, y] = 0.0
+                # else:
+                #     # Condicao de Dirichlet
+                #     vx_gpu[x, y] = 0.0
 
                 # Velocidade Vy
                 i_dix = -idx_fd_gpu[last, 2]
@@ -251,36 +238,38 @@ class SimulatorTaichi(Simulator):
                     vdsigmaxy_dx = 0.0
                     vdsigmayy_dy = 0.0
                     for c in range(0, ord):
-                        vdsigmaxy_dx += coefs_gpu[c] * (sigmaxy_gpu[x + idx_fd_gpu[c, 0], y] -
-                                                        sigmaxy_gpu[x + idx_fd_gpu[c, 2], y]) * one_dx
-                        vdsigmayy_dy += coefs_gpu[c] * (sigmayy_gpu[x, y + idx_fd_gpu[c, 0]] -
-                                                        sigmayy_gpu[x, y + idx_fd_gpu[c, 2]]) * one_dy
+                        vdsigmaxy_dx += coefs_gpu[c] * (sigmaxy_gpu[x + idx_fd_gpu[c, 0], y] - sigmaxy_gpu[x + idx_fd_gpu[c, 2], y]) * one_dx
+                        vdsigmayy_dy += coefs_gpu[c] * (sigmayy_gpu[x, y + idx_fd_gpu[c, 0]] - sigmayy_gpu[x, y + idx_fd_gpu[c, 2]]) * one_dy
 
                     mdsxy_dx_new = b_x_half_gpu[x - offset] * memory_dsigmaxy_dx_gpu[x, y] + a_x_half_gpu[x - offset] * vdsigmaxy_dx
                     mdsyy_dy_new = b_y_half_gpu[y - offset] * memory_dsigmayy_dy_gpu[x, y] + a_y_half_gpu[y - offset] * vdsigmayy_dy
 
-                    vdsigmaxy_dx = vdsigmaxy_dx / k_y_half_gpu[x - offset] + mdsxy_dx_new
+                    vdsigmaxy_dx = vdsigmaxy_dx / k_x_half_gpu[x - offset] + mdsxy_dx_new
                     vdsigmayy_dy = vdsigmayy_dy / k_y_half_gpu[y - offset] + mdsyy_dy_new
 
                     memory_dsigmaxy_dx_gpu[x, y] = mdsxy_dx_new
                     memory_dsigmayy_dy_gpu[x,y] = mdsyy_dy_new
 
-                    rho = 0.25 * rho_grid_vx_gpu[x,y] + rho_grid_vx_gpu[x + 1, y] + rho_grid_vy_gpu[x + 1,y + 1] + rho_grid_vy_gpu[x, y + 1]
+                    rho = 0.25 * (rho_grid_vx_gpu[x,y] + rho_grid_vx_gpu[x + 1, y] + rho_grid_vx_gpu[x + 1,y + 1] + rho_grid_vx_gpu[x, y + 1])
                     if rho > 0.0:
                         vy_gpu[x, y] += (vdsigmaxy_dx + vdsigmayy_dy) * dt / rho
-                else:
-                    # Condicao de Dirichlet
-                    vy_gpu[x, y] = 0.0
+                # else:
+                #     # Condicao de Dirichlet
+                #     vy_gpu[x, y] = 0.0
 
                 # Adiciona o sinal de fonte, se o pixel fizer parte de uma fonte
                 idx_src = idx_src_gpu[x, y]
-                rho = 0.25 * rho_grid_vx_gpu[x, y] + rho_grid_vx_gpu[x + 1, y] + rho_grid_vy_gpu[x + 1, y + 1] + rho_grid_vy_gpu[x, y + 1]
+                rho = 0.25 * (rho_grid_vx_gpu[x, y] + rho_grid_vx_gpu[x + 1, y] + rho_grid_vx_gpu[x + 1, y + 1] + rho_grid_vx_gpu[x, y + 1])
                 if (idx_src != -1 and rho > 0.0):
                     vy_gpu[x, y] += source_term_gpu[it - 1, idx_src] * dt / rho
 
+                if (x < i_dix or x >= i_dfx or y < i_diy or y >= i_dfy):
+                    vx_gpu[x, y] = 0.0
+                    vy_gpu[x, y] = 0.0
+
                 # Calcula a velocidade normal L2
                 v_2_new = ti.abs(vx_gpu[x,y] * vx_gpu[x,y] + vy_gpu[x,y] * vy_gpu[x,y])
-                v2_norm_gpu[None] = v_2_old if v_2_old > v_2_new else v_2_new
+                v2_norm_gpu[None] = max(v2_norm_gpu[None], v_2_new)
 
                 # Armazena o sinal do sensor, se o pixel fizer parte de um receptor
                 sensor = idx_sen_gpu[x, y]
