@@ -8,8 +8,9 @@ import numpy as np
 class AttenuationCoefficients:
 
     def __init__(self):
+
         self._n_sls = 3
-        self._viscoelastic_attn = True
+        self._viscoelastic_attn = 0
 
         self._kappa_coeffs = (
             np.array([0.024081581857536852, 0.0046996089908613505, 0.00095679978724359251], dtype=np.float32),
