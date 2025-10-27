@@ -45,7 +45,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 13000,
+    "time_steps": 5000,
     "dt": 2e-3,
     "acc": 4,
     "it_display": 10
@@ -53,7 +53,7 @@
   "simul_configs":
   {
     "n_iter": 1,
-    "show_anim": 1,
+    "show_anim": 0,
     "max_val_fields": 100.0,
     "min_val_fields": -100.0,
     "show_xy": 0,
@@ -63,13 +63,14 @@
     "show_figs": 0,
     "plot_results": 0,
     "plot_sensors": 0,
-    "plot_bscan": 0,
+    "plot_bscan": 1,
     "save_results": 0,
     "save_sensors": 0,
     "save_field": 0,
-    "save_bscan": 0,
+    "save_bscan": 1,
     "save_sources": 0,
     "source_env": 0,
+    "viscoelastic_attn": 0,
     "emission_laws": "./",
     "results_dir": "./ensaios/bloquinho/results"
   },
