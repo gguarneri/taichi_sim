@@ -463,18 +463,9 @@ class SimulatorWebGPU(Simulator):
         compute_velocity_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
                                                                        compute={"module": cshader,
                                                                                 "entry_point": "velocity_kernel"})
-        compute_sources_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                compute={"module": cshader,
-                                                                         "entry_point": "sources_kernel"})
-        compute_finish_it_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                  compute={"module": cshader,
-                                                                           "entry_point": "finish_it_kernel"})
-        compute_store_sensors_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                      compute={"module": cshader,
-                                                                               "entry_point": "store_sensors_kernel"})
         compute_incr_it_kernel = self._device.create_compute_pipeline(layout=pipeline_layout,
-                                                                compute={"module": cshader,
-                                                                         "entry_point": "incr_it_kernel"})
+                                                                      compute={"module": cshader,
+                                                                               "entry_point": "incr_it_kernel"})
 
         # Definicao dos limites para a plotagem dos campos
         ix_min = self._roi.get_ix_min()
@@ -507,18 +498,6 @@ class SimulatorWebGPU(Simulator):
             # Ativa o pipeline de execucao do calculo das velocidades
             compute_pass.set_pipeline(compute_velocity_kernel)
             compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de adicao dos termos de fonte
-            # compute_pass.set_pipeline(compute_sources_kernel)
-            # compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de execucao dos procedimentos finais da iteracao
-            # compute_pass.set_pipeline(compute_finish_it_kernel)
-            # compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
-
-            # Ativa o pipeline de execucao do armazenamento dos sensores
-            compute_pass.set_pipeline(compute_store_sensors_kernel)
-            compute_pass.dispatch_workgroups(1)
 
             # Ativa o pipeline de atualizacao da amostra de tempo
             compute_pass.set_pipeline(compute_incr_it_kernel)

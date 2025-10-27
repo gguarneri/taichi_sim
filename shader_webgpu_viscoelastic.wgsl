@@ -1069,6 +1069,7 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let x: i32 = i32(index.x);          // x thread index
     let y: i32 = i32(index.y);          // y thread index
     let dt: f32 = sim_flt_par.dt;
+    let it: i32 = sim_int_par.it;
     let dx: f32 = sim_flt_par.dx;
     let dy: f32 = sim_flt_par.dy;
     let last: i32 = sim_int_par.fd_coeff - 1;
@@ -1108,7 +1109,6 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     id_x_f = sim_int_par.x_sz - get_idx_ih(last);
     id_y_i = -get_idx_fh(last);
     id_y_f = sim_int_par.y_sz - get_idx_ih(last);
-    let rho: f32 = 0.25 * (get_rho(x, y) + get_rho(x + 1, y) + get_rho(x + 1, y + 1) + get_rho(x, y + 1));
     if(x >= id_x_i && x < id_x_f && y >= id_y_i && y < id_y_f) {
         var vdsigmaxy_dx: f32 = 0.0;
         var vdsigmayy_dy: f32 = 0.0;
@@ -1126,40 +1126,14 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         set_mdsxy_dx(x, y, mdsxy_dx_new);
         set_mdsyy_dy(x, y, mdsyy_dy_new);
 
+        let rho: f32 = 0.25 * (get_rho(x, y) + get_rho(x + 1, y) + get_rho(x + 1, y + 1) + get_rho(x, y + 1));
         if(rho > 0.0) {
             let vy: f32 = (vdsigmaxy_dx + vdsigmayy_dy) * dt / rho + get_vy(x, y);
             set_vy(x, y, vy);
         }
-    } else {
-        set_vx(x,y,0.0);
-        set_vy(x,y,0.0);
     }
 
-    // Add the source force
-    let idx_src_term: i32 = get_idx_source_term(x, y);
-    if(idx_src_term != -1 && rho > 0.0) {
-        let val_src: f32 = get_source_term(sim_int_par.it, idx_src_term);
-        let vy: f32 = get_vy(x, y) +  val_src * dt / rho;
-        set_vy(x, y, vy);
-    }
-
-    // Compute velocity norm L2
-    let v_2_old: f32 = v_2;
-    let v2: f32 = get_vx(x, y) * get_vx(x, y) + get_vy(x, y) * get_vy(x, y);
-    v_2 = max(v_2_old, v2);
-
-}
-
-// Kernel to add the sources forces
-@compute
-@workgroup_size(wsx, wsy)
-fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
-    let x: i32 = i32(index.x);          // x thread index
-    let y: i32 = i32(index.y);          // y thread index
-    let dt: f32 = sim_flt_par.dt;
-    let it: i32 = sim_int_par.it;
-
-    // Add the source force
+        // Add the source force
     let idx_src_term: i32 = get_idx_source_term(x, y);
     let rho: f32 = 0.25 * (get_rho(x, y) + get_rho(x + 1, y) + get_rho(x + 1, y + 1) + get_rho(x, y + 1));
     if(idx_src_term != -1 && rho > 0.0) {
@@ -1167,22 +1141,10 @@ fn sources_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         let vy: f32 = get_vy(x, y) +  val_src * dt / rho;
         set_vy(x, y, vy);
     }
-}
 
-// Kernel to finish iteration term
-@compute
-@workgroup_size(wsx, wsy)
-fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
-    let x: i32 = i32(index.x);          // x thread index
-    let y: i32 = i32(index.y);          // y thread index
-    let last: i32 = sim_int_par.fd_coeff - 1;
-    let id_x_i: i32 = -get_idx_fh(last);
-    let id_x_f: i32 = sim_int_par.x_sz - get_idx_ih(last);
-    let id_y_i: i32 = -get_idx_fh(last);
-    let id_y_f: i32 = sim_int_par.y_sz - get_idx_ih(last);
+     // Apply Dirichlet conditions
     let v_2_old: f32 = v_2;
 
-    // Apply Dirichlet conditions
     if(x <= id_x_i || x >= id_x_f || y <= id_y_i || y >= id_y_f) {
         set_vx(x, y, 0.0);
         set_vy(x, y, 0.0);
@@ -1191,34 +1153,28 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     // Compute velocity norm L2
     let v2: f32 = get_vx(x, y) * get_vx(x, y) + get_vy(x, y) * get_vy(x, y);
     v_2 = max(v_2_old, v2);
-}
 
-// Kernel to store sensors velocity
-@compute
-@workgroup_size(idx_rec_offset)
-fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
-    let sensor: i32 = i32(index.x);          // x thread index
-    let it: i32 = sim_int_par.it;
-
-    // Store sensors velocities
+    // Store sensors velocity
+    let sensor: i32 = x;
     for(var pt: i32 = get_offset_sensor(sensor); get_idx_sensor(pt) == sensor; pt++) {
         if(it >= get_delay_rec(sensor)) {
-            let x: i32 = get_idx_x_sensor(pt);
-            let y: i32 = get_idx_y_sensor(pt);
+            let x_s: i32 = get_idx_x_sensor(pt);
+            let y_s: i32 = get_idx_y_sensor(pt);
 
-            let value_sens_vx: f32 = get_sens_vx(it, sensor) + get_vx(x, y);
-            let value_sens_vy: f32 = get_sens_vy(it, sensor) + get_vy(x, y);
+            let value_sens_vx: f32 = get_sens_vx(it, sensor) + get_vx(x_s, y_s);
+            let value_sens_vy: f32 = get_sens_vy(it, sensor) + get_vy(x_s, y_s);
             set_sens_vx(it, sensor, value_sens_vx);
             set_sens_vy(it, sensor, value_sens_vy);
 
-            let value_sens_sigxx: f32 = get_sens_sigxx(it, sensor) + get_sigmaxx(x, y);
-            let value_sens_sigyy: f32 = get_sens_sigyy(it, sensor) + get_sigmayy(x, y);
-            let value_sens_sigxy: f32 = get_sens_sigxy(it, sensor) + get_sigmaxy(x, y);
+            let value_sens_sigxx: f32 = get_sens_sigxx(it, sensor) + get_sigmaxx(x_s, y_s);
+            let value_sens_sigyy: f32 = get_sens_sigyy(it, sensor) + get_sigmayy(x_s, y_s);
+            let value_sens_sigxy: f32 = get_sens_sigxy(it, sensor) + get_sigmaxy(x_s, y_s);
             set_sens_sigxx(it, sensor, value_sens_sigxx);
             set_sens_sigyy(it, sensor, value_sens_sigyy);
             set_sens_sigxy(it, sensor, value_sens_sigxy);
         }
     }
+
 }
 
 // Kernel to increase time iteraction [it]
