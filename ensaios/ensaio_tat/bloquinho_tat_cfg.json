@@ -34,7 +34,7 @@
         "coord_center": [
           25.0,
           0.0,
-          79.9
+          79.8
         ],
         "emitters": [
           "False",
@@ -89,7 +89,7 @@
         "coord_center": [
           25.0,
           0.0,
-          0.1
+          0.2
         ],
         "emitters": "all",
         "t0_emission": 1.5,
@@ -157,7 +157,8 @@
     "save_sources": 0,
     "source_env": 0,
     "emission_laws": "./",
-    "results_dir": "./ensaios/ensaio_tat/results"
+    "results_dir": "./ensaios/ensaio_tat/results",
+    "viscoelastic_attn": 0
   },
   "specimen_params":
   {
