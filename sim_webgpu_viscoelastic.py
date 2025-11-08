@@ -57,7 +57,7 @@ class SimulatorWebGPU(Simulator):
         # Arrays com parametros para calculo da atenuacao
         att = AttenuationCoefficients()
         n_sls = att._n_sls
-        viscoelastic_attn = att._viscoelastic_attn
+        viscoelastic_attn = self._configs["simul_configs"]["viscoelastic_attn"]
 
         alpha_sum = np.array([att._sum_alpha_p, att._sum_alpha_s], dtype=flt32)
 
