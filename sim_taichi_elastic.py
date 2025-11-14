@@ -282,8 +282,6 @@ class SimulatorTaichi(Simulator):
                     sens_sigyy_gpu[it - 1, sensor] += sigmayy_gpu[x, y]
 
 
-
-
         # Laco de tempo para execucao da simulacao
         t_gpu = time()
         for it in range(1, self._n_steps + 1):

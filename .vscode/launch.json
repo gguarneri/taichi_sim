@@ -166,7 +166,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/sim_webgpu_viscoelastic.py",
             "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/bloquinho/bloquinho_tat_cfg.json"
+            "args": "--config=${workspaceFolder}/ensaios/ensaio_tat/bloquinho_tat_cfg.json"
         }
     ]
 }
