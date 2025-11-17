@@ -4,8 +4,8 @@
       "coord_ref" : [[0.0, 0.0, 0.0]],
       "height" : 80.0,
       "h_len" : 800,
-      "width" : 70.0,
-      "w_len" : 700,
+      "width" : 60.0,
+      "w_len" : 600,
       "depth" : 0.0,
       "d_len" : 1,
       "len_pml_xmin" : 11,
@@ -45,7 +45,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 20000,
+    "time_steps": 27000,
     "dt": 2e-3,
     "acc": 2,
     "it_display": 10
@@ -53,7 +53,7 @@
   "simul_configs":
   {
     "n_iter": 1,
-    "show_anim": 1,
+    "show_anim": 0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
@@ -70,15 +70,15 @@
     "source_env": 0,
     "emission_laws": "./",
     "results_dir": "./ensaios/ensaio_tat/results",
-    "viscoelastic_attn": 0
+    "viscoelastic_attn": 1
   },
   "specimen_params":
   {
-    "cp_map": "./ensaios/ensaio_tat/tat_maps/bloq_tat_700x800_cp.npy",
+    "cp_map": "./ensaios/ensaio_tat/tat_maps/bloq_tat_600x800_cp.npy",
     "cp": 6.393,
-    "cs_map": "./ensaios/ensaio_tat/tat_maps/bloq_tat_700x800_cs.npy",
+    "cs_map": "./ensaios/ensaio_tat/tat_maps/bloq_tat_600x800_cs.npy",
     "cs": 3.1965,
-    "rho_map": "./ensaios/ensaio_tat/tat_maps/bloq_tat_700x800_rho.npy",
+    "rho_map": "./ensaios/ensaio_tat/tat_maps/bloq_tat_600x800_rho.npy",
     "rho": 2700.0
   }
 }

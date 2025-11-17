@@ -186,7 +186,7 @@ class SimulatorWebGPU(Simulator):
         b_delay_rec = self._device.create_buffer_with_data(data=self._delay_recv, usage=read_only_mask)
 
         # Informacoes dos pontos receptores
-        b_idx_sen = self._device.create_buffer_with_data(data=self._pos_sensors, usage=read_only_mask)
+        b_info_rec_pt = self._device.create_buffer_with_data(data=self._info_rec_pt, usage=read_only_mask)
 
         b_offset_sensors = self._device.create_buffer_with_data(data=self._offset_sensors, usage=read_only_mask)
 
@@ -221,15 +221,15 @@ class SimulatorWebGPU(Simulator):
             {"binding": ii,
              "visibility": wgpu.ShaderStage.COMPUTE,
              "buffer": {
-                 "type": wgpu.BufferBindingType.read_only_storage}
-             } for ii in range(0, 2)
+                 "type": wgpu.BufferBindingType.storage}
+             } for ii in [*range(0, 2), *range(5, 8)]
         ]
         bl_sensors += [
-            {"binding": 2,
+            {"binding": ii,
              "visibility": wgpu.ShaderStage.COMPUTE,
              "buffer": {
-                 "type": wgpu.BufferBindingType.storage}
-             }
+                 "type": wgpu.BufferBindingType.read_only_storage}
+             } for ii in range(2, 5)
         ]
 
         # Configuracao das amarracoes (bindings)
@@ -412,15 +412,35 @@ class SimulatorWebGPU(Simulator):
         b_sensors = [
             {
                 "binding": 0,
-                "resource": {"buffer": b_delay_rec, "offset": 0, "size": b_delay_rec.size},
+                "resource": {"buffer": b_sens_x, "offset": 0, "size": b_sens_x.size},
             },
             {
                 "binding": 1,
-                "resource": {"buffer": b_idx_sen, "offset": 0, "size": b_idx_sen.size},
+                "resource": {"buffer": b_sens_y, "offset": 0, "size": b_sens_y.size},
             },
             {
                 "binding": 2,
+                "resource": {"buffer": b_delay_rec, "offset": 0, "size": b_delay_rec.size},
+            },
+            {
+                "binding": 3,
+                "resource": {"buffer": b_info_rec_pt, "offset": 0, "size": b_info_rec_pt.size},
+            },
+            {
+                "binding": 4,
+                "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
+            },
+            {
+                "binding": 5,
+                "resource": {"buffer": b_sens_sigxx, "offset": 0, "size": b_sens_sigxx.size},
+            },
+            {
+                "binding": 6,
                 "resource": {"buffer": b_sens_sigyy, "offset": 0, "size": b_sens_sigyy.size},
+            },
+            {
+                "binding": 7,
+                "resource": {"buffer": b_sens_sigxy, "offset": 0, "size": b_sens_sigxy.size},
             },
         ]
 
@@ -497,8 +517,8 @@ class SimulatorWebGPU(Simulator):
             # compute_pass.dispatch_workgroups(self._nx // self._wsx, self._ny // self._wsy)
 
             # Ativa o pipeline de execucao do armazenamento dos sensores
-            # compute_pass.set_pipeline(compute_store_sensors_kernel)
-            # compute_pass.dispatch_workgroups(1)
+            compute_pass.set_pipeline(compute_store_sensors_kernel)
+            compute_pass.dispatch_workgroups(1)
 
             # Ativa o pipeline de atualizacao da amostra de tempo
             compute_pass.set_pipeline(compute_incr_it_kernel)
@@ -574,4 +594,3 @@ except KeyError as key:
 
 except ValueError as value:
     print(value)
-
