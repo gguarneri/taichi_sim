@@ -733,49 +733,28 @@ fn set_r_xy_old(x: i32, y: i32, z: i32, val: f32) {
 // --------------------------------------
 // --- Sensors arrays access funtions ---
 // --------------------------------------
-@group(2) @binding(0) // sensors signals vx
-var<storage,read_write> sensors_vx: array<f32>;
+@group(2) @binding(0) // sensors signals sigyy
+var<storage,read_write> sensors_sigyy: array<f32>;
 
-// function to get a sens_vx array value
-fn get_sens_vx(n: i32, s: i32) -> f32 {
+// function to get a sens_sigyy array value
+fn get_sens_sigyy(n: i32, s: i32) -> f32 {
     let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
 
-    return select(0.0, sensors_vx[index], index != -1);
+    return select(0.0, sensors_sigyy[index], index != -1);
 }
 
-// function to set a sens_vx array value
-fn set_sens_vx(n: i32, s: i32, val : f32) {
+// function to set a sens_sigyy array value
+fn set_sens_sigyy(n: i32, s: i32, val : f32) {
     let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
 
     if(index != -1) {
-        sensors_vx[index] = val;
+        sensors_sigyy[index] = val;
     }
 }
 
 // ----------------------------------
 
-@group(2) @binding(1) // sensors signals vy
-var<storage,read_write> sensors_vy: array<f32>;
-
-// function to get a sens_vy array value
-fn get_sens_vy(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    return select(0.0, sensors_vy[index], index != -1);
-}
-
-// function to set a sens_vy array value
-fn set_sens_vy(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    if(index != -1) {
-        sensors_vy[index] = val;
-    }
-}
-
-// ----------------------------------
-
-@group(2) @binding(2) // delay sensor
+@group(2) @binding(1) // delay sensor
 var<storage,read> delay_rec: array<i32>;
 
 // function to get a delay receiver value
@@ -785,7 +764,7 @@ fn get_delay_rec(s: i32) -> i32 {
 
 // ----------------------------------
 
-@group(2) @binding(3) // info rec ptos
+@group(2) @binding(2) // info rec ptos
 var<storage,read> info_rec_pt: array<i32>;
 
 // function to get a x-index of a receiver point
@@ -811,75 +790,12 @@ fn get_idx_sensor(n: i32) -> i32 {
 
 // ----------------------------------
 
-@group(2) @binding(4) // info rec ptos
+@group(2) @binding(3) // info rec ptos
 var<storage,read> offset_sensors: array<i32>;
 
 // function to get the offset of a sensor receiver in info_rec_pt table
 fn get_offset_sensor(s: i32) -> i32 {
     return select(-1, offset_sensors[s], s >= 0 && s < sim_int_par.n_rec_el);
-}
-
-// ----------------------------------
-
-@group(2) @binding(5) // sensors signals sigxx
-var<storage,read_write> sensors_sigxx: array<f32>;
-
-// function to get a sens_sigxx array value
-fn get_sens_sigxx(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    return select(0.0, sensors_sigxx[index], index != -1);
-}
-
-// function to set a sens_sigxx array value
-fn set_sens_sigxx(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    if(index != -1) {
-        sensors_sigxx[index] = val;
-    }
-}
-
-// ----------------------------------
-
-@group(2) @binding(6) // sensors signals sigyy
-var<storage,read_write> sensors_sigyy: array<f32>;
-
-// function to get a sens_sigyy array value
-fn get_sens_sigyy(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    return select(0.0, sensors_sigyy[index], index != -1);
-}
-
-// function to set a sens_sigyy array value
-fn set_sens_sigyy(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    if(index != -1) {
-        sensors_sigyy[index] = val;
-    }
-}
-
-// ----------------------------------
-
-@group(2) @binding(7) // sensors signals sigxy
-var<storage,read_write> sensors_sigxy: array<f32>;
-
-// function to get a sens_sigxx array value
-fn get_sens_sigxy(n: i32, s: i32) -> f32 {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    return select(0.0, sensors_sigxy[index], index != -1);
-}
-
-// function to set a sens_sigxy array value
-fn set_sens_sigxy(n: i32, s: i32, val : f32) {
-    let index: i32 = ij(n, s, sim_int_par.n_iter, sim_int_par.n_rec_el);
-
-    if(index != -1) {
-        sensors_sigxy[index] = val;
-    }
 }
 
 // ---------------
@@ -999,8 +915,11 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             sigmaxx = get_sigmaxx(x, y) + (lambdaplus2mu * vdvx_dx + lambda        * vdvy_dy)*dt;
             sigmayy = get_sigmayy(x, y) + (lambda        * vdvx_dx + lambdaplus2mu * vdvy_dy)*dt;
         }
+
         set_sigmaxx(x, y, sigmaxx);
         set_sigmayy(x, y, sigmayy);
+           // Add the source force
+
     }
 
     // Shear stresses
@@ -1057,7 +976,9 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
         else {
             sigmaxy = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
         }
+
         set_sigmaxy(x, y, sigmaxy);
+
 
     }
 }
@@ -1206,17 +1127,8 @@ fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
             let x: i32 = get_idx_x_sensor(pt);
             let y: i32 = get_idx_y_sensor(pt);
 
-            let value_sens_vx: f32 = get_sens_vx(it, sensor) + get_vx(x, y);
-            let value_sens_vy: f32 = get_sens_vy(it, sensor) + get_vy(x, y);
-            set_sens_vx(it, sensor, value_sens_vx);
-            set_sens_vy(it, sensor, value_sens_vy);
-
-            let value_sens_sigxx: f32 = get_sens_sigxx(it, sensor) + get_sigmaxx(x, y);
             let value_sens_sigyy: f32 = get_sens_sigyy(it, sensor) + get_sigmayy(x, y);
-            let value_sens_sigxy: f32 = get_sens_sigxy(it, sensor) + get_sigmaxy(x, y);
-            set_sens_sigxx(it, sensor, value_sens_sigxx);
             set_sens_sigyy(it, sensor, value_sens_sigyy);
-            set_sens_sigxy(it, sensor, value_sens_sigxy);
         }
     }
 }

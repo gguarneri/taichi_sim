@@ -218,18 +218,18 @@ class SimulatorWebGPU(Simulator):
 
         # Sensores
         bl_sensors = [
-            {"binding": ii,
+            {"binding": 0,
              "visibility": wgpu.ShaderStage.COMPUTE,
              "buffer": {
                  "type": wgpu.BufferBindingType.storage}
-             } for ii in [*range(0, 2), *range(5, 8)]
+             }
         ]
         bl_sensors += [
             {"binding": ii,
              "visibility": wgpu.ShaderStage.COMPUTE,
              "buffer": {
                  "type": wgpu.BufferBindingType.read_only_storage}
-             } for ii in range(2, 5)
+             } for ii in range(1, 4)
         ]
 
         # Configuracao das amarracoes (bindings)
@@ -412,35 +412,19 @@ class SimulatorWebGPU(Simulator):
         b_sensors = [
             {
                 "binding": 0,
-                "resource": {"buffer": b_sens_x, "offset": 0, "size": b_sens_x.size},
-            },
-            {
-                "binding": 1,
-                "resource": {"buffer": b_sens_y, "offset": 0, "size": b_sens_y.size},
-            },
-            {
-                "binding": 2,
-                "resource": {"buffer": b_delay_rec, "offset": 0, "size": b_delay_rec.size},
-            },
-            {
-                "binding": 3,
-                "resource": {"buffer": b_info_rec_pt, "offset": 0, "size": b_info_rec_pt.size},
-            },
-            {
-                "binding": 4,
-                "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
-            },
-            {
-                "binding": 5,
-                "resource": {"buffer": b_sens_sigxx, "offset": 0, "size": b_sens_sigxx.size},
-            },
-            {
-                "binding": 6,
                 "resource": {"buffer": b_sens_sigyy, "offset": 0, "size": b_sens_sigyy.size},
             },
             {
-                "binding": 7,
-                "resource": {"buffer": b_sens_sigxy, "offset": 0, "size": b_sens_sigxy.size},
+                "binding": 1,
+                "resource": {"buffer": b_delay_rec, "offset": 0, "size": b_delay_rec.size},
+            },
+            {
+                "binding": 2,
+                "resource": {"buffer": b_info_rec_pt, "offset": 0, "size": b_info_rec_pt.size},
+            },
+            {
+                "binding": 3,
+                "resource": {"buffer": b_offset_sensors, "offset": 0, "size": b_offset_sensors.size},
             },
         ]
 
@@ -538,15 +522,11 @@ class SimulatorWebGPU(Simulator):
                     print(f'Max norm velocity vector V (m/s) = {vsn2}')
 
                 if self._show_anim:
-                    vxgpu = np.asarray(
-                        self._device.queue.read_buffer(b_vx, buffer_offset=0).cast("f")).reshape(
+                    sigmayygpu = np.asarray(
+                        self._device.queue.read_buffer(b_sigmayy, buffer_offset=0).cast("f")).reshape(
                         (self._nx, self._ny))
-                    vygpu = np.asarray(
-                        self._device.queue.read_buffer(b_vy, buffer_offset=0).cast("f")).reshape(
-                        (self._nx, self._ny))
-                    self._windows_gpu[0].imv.setImage(vxgpu[ix_min:ix_max, iy_min:iy_max],
-                                                      levels=[self._min_val_fields, self._max_val_fields])
-                    self._windows_gpu[1].imv.setImage(vygpu[ix_min:ix_max, iy_min:iy_max],
+
+                    self._windows_gpu[0].imv.setImage(sigmayygpu[ix_min:ix_max, iy_min:iy_max],
                                                       levels=[self._min_val_fields, self._max_val_fields])
                     self._app.processEvents()
 

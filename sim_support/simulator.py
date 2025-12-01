@@ -298,9 +298,7 @@ class Simulator:
             y_pos = 100 + np.arange(3) * (ny + 50)
             if (sim_type == "viscoelastic" or "elastic"):
                 windows_gpu_data = [
-                    {"title": "Vx [GPU]", "geometry": (x_pos[0], y_pos[0],
-                                                       self._roi.get_nx(), self._roi.get_nz())},
-                    {"title": "Vy [GPU]", "geometry": (x_pos[1], y_pos[0],
+                    {"title": "Stress YY [GPU]", "geometry": (x_pos[0], y_pos[0],
                                                        self._roi.get_nx(), self._roi.get_nz())},
                 ]
             else:

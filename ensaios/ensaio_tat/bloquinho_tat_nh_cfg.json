@@ -45,7 +45,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 27000,
+    "time_steps": 6000,
     "dt": 2e-3,
     "acc": 2,
     "it_display": 10
@@ -53,7 +53,7 @@
   "simul_configs":
   {
     "n_iter": 1,
-    "show_anim": 0,
+    "show_anim": 1,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
@@ -70,7 +70,7 @@
     "source_env": 0,
     "emission_laws": "./",
     "results_dir": "./ensaios/ensaio_tat/results",
-    "viscoelastic_attn": 1
+    "viscoelastic_attn": 0
   },
   "specimen_params":
   {
