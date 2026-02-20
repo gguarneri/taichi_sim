@@ -533,6 +533,118 @@ class ElementRect:
 
         return list_out
 
+class ElementCirc:
+    """
+    Classe que define um elemento circular de um transdutor de ultrassom.
+    Essa classe pode ser utilizada no transdutor "MonoCirc" até o momento.
+    """
+
+    def __init__(self, radius=0.25, coord_center=np.zeros((3,)),
+                 freq=5., bw=0.5, gain=1.0, t0=1.0,
+                 tx_en=True, rx_en=True, pulse_type="gaussian"):
+        
+        # Dimensões e Posição
+        self.radius = np.float32(radius)
+        
+        # Coordenada central do elemento
+        self.coord_center = coord_center.astype(np.float32)
+
+        # Parâmetros de Sinal
+        self.freq = np.float32(freq)
+        self.bw = np.float32(bw)
+        self.gain = np.float32(gain)
+        self.t0 = np.float32(t0)
+        self.tx_en = tx_en
+        self.rx_en = rx_en
+        self.pulse_type = pulse_type
+
+    def get_element_exc_fn(self, t, out='r'):
+        dt = t[1] - t[0]
+        gp, _, egp = gausspulse((t - self.t0), fc=self.freq, bw=self.bw, retquad=True, retenv=True)
+        eps = np.finfo(flt32).eps
+        if out == 'e':
+            egp[np.abs(egp) < eps] = 0.0
+            ss = flt32(egp)
+        else:
+            gp[np.abs(gp) < eps] = 0.0
+            ss = flt32(gp)
+
+        return np.diff(self.gain * np.float32(ss) / dt, append=0.0).astype(flt32)
+
+    def _get_candidate_points(self, sim_roi, simul_type, current_center):
+        """
+        Método auxiliar que calcula pontos baseado em um centro específico.
+        """
+        dec_w, dec_d, dec_h = sim_roi.get_dec()
+        simul_type = simul_type.lower()
+
+        num_pt_a = int(np.round((2.0 * self.radius) / sim_roi.w_step, decimals=dec_w))
+        
+        if simul_type == "3d":
+            depth_radius = min(self.radius, sim_roi.depth)
+            num_pt_p = int(np.round((2.0 * depth_radius) / sim_roi.d_step, decimals=dec_d))
+        else:
+            num_pt_p = 1
+            depth_radius = 0.0
+
+        x_start = np.float32(current_center[0] - self.radius)
+        
+        y_start = np.float32(0.0 if simul_type == "2d" else current_center[1] - depth_radius)
+        z_coord = current_center[2]
+
+        corner_coord = np.array([x_start, y_start, z_coord], dtype=flt32)
+        corner_idx = sim_roi.get_nearest_grid_idx(corner_coord)
+
+        list_out = list()
+        
+        for jj in range(num_pt_a):
+            dx = (jj - (num_pt_a - 1) / 2.0) * sim_roi.w_step
+            
+            for zz in range(num_pt_p):
+                if simul_type == "3d":
+                    dy = (zz - (num_pt_p - 1) / 2.0) * sim_roi.d_step
+                else:
+                    dy = 0.0
+
+                # Verifica se está dentro do raio (equação do círculo)
+                if np.sqrt(dx**2 + dy**2) <= self.radius:
+                    ix = corner_idx[0] + jj
+                    # Em 2D, mantemos o índice Y original; em 3D iteramos ip
+                    iy = corner_idx[1] + (0 if simul_type == "2d" else zz)
+                    iz = corner_idx[2]
+                    
+                    list_out.append([ix, iy, iz])
+
+        return list_out
+
+    def get_num_points_roi(self, sim_roi, simul_type="2D"):
+        """
+        Função que retorna o número dos pontos ativos do transdutor no grid de simulação.
+        
+        """
+        
+        return len(self._get_candidate_points(sim_roi, simul_type, self.coord_center))
+
+    def get_points_roi(self, sim_roi, probe_center=np.zeros((3,)), simul_type="2D", dir="e"):
+        """
+        Função que retorna as coordenadas de todos os pontos ativos do transdutor no grid de simulação,
+        no formato vetorizado.
+        
+        """
+        if not isinstance(dir, str):
+            raise ValueError("'dir' must be a string")
+            
+        if (dir.lower() == "e" and not self.tx_en) or (dir.lower() == "r" and not self.rx_en):
+            return list()
+
+        # Calcula o centro efetivo somando o offset do probe
+        # O flatten garante consistência dimensional
+        probe_offset = probe_center.astype(flt32).flatten()
+        effective_center = self.coord_center + probe_offset
+
+        # Passa o centro calculado sem alterar o estado do objeto
+        return self._get_candidate_points(sim_roi, simul_type, effective_center)
+    
 
 class SimulationProbeLinearArray(SimulationProbe):
     """
@@ -770,10 +882,7 @@ class SimulationProbeLinearArray(SimulationProbe):
 
     def get_source_term(self, samples=1000, dt=1.0, out='r'):
         """
-        Função que retorna os sinais dos termos de fonte do transdutor. Além de retornar um
-        *array* com os sinais dos termos de fonte de cada elemento ativo do transdutor, esta função
-        também retorna uma lista com o índice do termo de fonte para cada ponto da ROI que é
-        um ponto emissor.
+        Retorna o sinal do termo de fonte do transdutor.
         :param out:
         :param samples: int
             Número de amostras de tempo na simulação.
@@ -1071,3 +1180,309 @@ class SimulationProbePoint(SimulationProbe):
         Quantidade de pontos receptores.
         """
         return 1 if self.receivers[0] else 0
+
+class SimulationProbeMono(SimulationProbe):
+    """
+    Classe contendo as configurações de um transdutor do tipo mono-elemento.
+    É uma classe derivada de ``SimulationProbe``, específica para transdutores do tipo
+    "MonoCirc".
+
+    Parameters
+    ----------
+        coord_center : :class:`np.ndarray`
+            Coordenada relativa à posição espacial do centro do transdutor.
+            Por padrão, [0.0, 0.0, 0.0].
+
+        dec : tuple of int
+            Número de casas decimais para arredondamento nos eixos (w, d, h).
+            Por padrão, (2, 2, 2).
+
+        radius : int, float
+            Raio do elemento circular, em mm. Por padrão, é 0.25 mm.
+
+        freq : int, float
+            Frequência central, em MHz. Por padrão, é 5 MHz.
+
+        bw : int, float
+            Banda passante, em percentual da frequência central. Por padrão,
+            é 0.5 (50%).
+
+        gain : int, float
+            Ganho do elemento transdutor. Por padrão, é 1.0.
+
+        pulse_type : str
+            Tipo do pulso de excitação. O único tipo possível é: ``gaussian``.
+            Por padrão, é ``gaussian``.
+
+        id : str
+            Identificador do transdutor. Por padrão, é "".
+
+        emitter : str
+            String booleana indicando se o transdutor é emissor ("True" ou "False").
+            Por padrão, é "True".
+
+        receiver : str
+            String booleana indicando se o transdutor é receptor ("True" ou "False").
+            Por padrão, é "False".
+
+        t0_emission : float, optional
+            Atraso do sinal de emissão, em microssegundos. Por padrão, é 0.0.
+
+        t0_reception : float, optional
+            Atraso do sinal de recepção, em microssegundos. Por padrão, é 0.0.
+
+    Attributes
+    ----------
+        num_elem : int
+            Número de elementos. Sempre igual a 1 para este transdutor.
+
+        elem : :class:`ElementCirc`
+            Objeto do tipo ``ElementCirc`` contendo as características físicas e
+            elétricas do elemento ativo do transdutor.
+
+        emitters : list of bool
+            Lista com flag indicando se o elemento é emissor.
+
+        receivers : list of bool
+            Lista com flag indicando se o elemento é receptor.
+    """
+
+    def __init__(self, coord_center=np.zeros((1, 3)), dec=(2, 2, 2),
+                 radius=3.175,
+                 freq=5., bw=0.5, gain=1.0, pulse_type="gaussian", id="",
+                 emitter="True", receiver="False",
+                 t0_emission=None, t0_reception=None):
+
+        # Chama o construtor da classe base.
+        super().__init__(coord_center, dec)
+
+        # Identificação do transdutor.
+        self._id = id
+
+        # Número de elementos (sempre 1 para transdutor mono).
+        self.num_elem = 1
+
+        # Lê a configuração se o transdutor é emissor.
+        if type(emitter) is str:
+            self.emitters = [eval(emitter.lower().capitalize())]
+        else:
+            raise ValueError("emitter must be a string")
+
+        # Lê a configuração se o transdutor é receptor.
+        if type(receiver) is str:
+            self.receivers = [eval(receiver.lower().capitalize())]
+        else:
+            raise ValueError("receiver must be a string")
+
+        # Tempo de atraso para emissão.
+        if t0_emission is None:
+            self._t0_emission = np.float32(0.0)
+        else:
+            self._t0_emission = np.float32(t0_emission)
+
+        # Tempo de atraso para recepção.
+        if t0_reception is None:
+            self._t0_reception = np.float32(0.0)
+        else:
+            self._t0_reception = np.float32(t0_reception)
+
+        # Instancia o elemento circular único.
+        # coord_center do elemento é zerado pois o offset do probe é aplicado em get_points_roi.
+        self.elem = ElementCirc(
+            radius=radius,
+            coord_center=np.zeros(3, dtype=np.float32),
+            freq=freq,
+            bw=bw,
+            gain=gain,
+            t0=self._t0_emission,
+            tx_en=self.emitters[0],
+            rx_en=self.receivers[0],
+            pulse_type=pulse_type
+        )
+
+        # Parâmetros gerais do transdutor.
+        self._radius = np.float32(radius)
+        self._freq = freq
+        self._bw = bw
+        self._gain = gain
+        self._pulse_type = pulse_type
+
+    def get_freq(self, mode='common'):
+        """
+        Retorna a frequência do transdutor.
+
+        Parameters
+        ----------
+        mode : str
+
+        Returns
+        -------
+        numpy.float32
+            Valor da frequência do transdutor.
+        """
+        return np.float32(self._freq)
+
+    def get_coords(self):
+        """
+        Retorna a coordenada real do centro do elemento ativo do transdutor.
+
+        Returns
+        -------
+        np.ndarray
+            Coordenada cartesiana do centro do elemento ativo.
+        """
+        return self.coord_center
+
+    def get_points_roi(self, sim_roi=SimulationROI(), simul_type="2D", dir="e"):
+        """
+        Função que retorna a coordenada do ponto ativo do transdutor no grid de simulação,
+        no formato vetorizado.
+
+        Returns
+        -------
+       
+        list 
+            Lista de índices do elemento fonte associado a cada ponto.
+        """
+        if not isinstance(dir, str):
+            raise ValueError("'dir' must be a string")
+
+        if (dir.lower() == "e" and not self.emitters[0]) or \
+           (dir.lower() == "r" and not self.receivers[0]):
+            return list(), list()
+
+        arr_elem = self.elem.get_points_roi(
+            sim_roi=sim_roi,
+            probe_center=self.coord_center,
+            simul_type=simul_type,
+            dir=dir
+        )
+
+        idx_src = [0 for _ in range(len(arr_elem))]
+
+        return arr_elem, idx_src
+
+    def get_source_term(self, samples=1000, dt=1.0, out='r', ord_der=1):
+        """
+        Retorna o sinal do termo de fonte do transdutor.
+
+        Parameters
+        ----------
+        samples : int
+            Número de amostras de tempo na simulação.
+        dt : float
+            Valor do passo de tempo na simulação.
+        out : str
+            'r' para parte real (cosseno), 'e' para envelope.
+        ord_der : int
+            Ordem da derivada do pulso gaussiano (0, 1 ou 2).
+
+        Returns
+        -------
+        np.ndarray
+            Array com N amostras do sinal de excitação.
+        """
+        dec = int(abs(np.log10(dt))) + 2
+        t = np.round(np.arange(samples, dtype=np.float32) * dt, decimals=dec)
+        ss = np.zeros(samples, dtype=flt32)
+
+        if self.emitters[0]:
+            if ord_der == 0:
+                gp, _, egp = gaussian_pulse(
+                    (t - self._t0_emission), fc=self._freq, bw=self._bw,
+                    retquad=True, retenv=True
+                )
+            elif ord_der == 2:
+                gp, _, egp = gaussian_second_dev_pulse(
+                    (t - self._t0_emission), fc=self._freq, bw=self._bw,
+                    retquad=True, retenv=True
+                )
+            else:
+                gp, _, egp = gaussian_first_dev_pulse(
+                    (t - self._t0_emission), fc=self._freq, bw=self._bw,
+                    retquad=True, retenv=True
+                )
+
+            eps = np.finfo(flt32).eps
+            if out == 'e':
+                egp[np.abs(egp) < eps] = 0.0
+                ss = flt32(egp)
+            else:
+                gp[np.abs(gp) < eps] = 0.0
+                ss = flt32(gp)
+
+        return flt32(self._gain * ss)
+
+    def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
+        """
+        Função que retorna um array com o índice do receptor para cada ponto da ROI que é um ponto receptor.
+
+        Parameters
+        ----------
+        sim_roi : SimulationROI
+            Região de interesse da simulação.
+        simul_type : str
+            Tipo de simulação: "2D" ou "3D".
+
+        Returns
+        -------
+        list of int
+            Lista com o índice do elemento receptor (sempre 0) para cada ponto receptor.
+            Retorna lista vazia se o elemento não é receptor.
+        """
+        if not self.receivers[0]:
+            return list()
+
+        arr_elem = self.elem.get_points_roi(
+            sim_roi=sim_roi,
+            probe_center=self.coord_center,
+            simul_type=simul_type,
+            dir='r'
+        )
+
+        return [0 for _ in range(len(arr_elem))]
+
+    def get_delay_rx(self):
+        """
+        Retorna o valor do atraso na recepção.
+
+        Returns
+        -------
+        list of float
+            Lista com o tempo de atraso de recepção, em microssegundos.
+        """
+        return [self._t0_reception] if self.receivers[0] else list()
+
+    def set_t0(self, t0_emission=None):
+        """
+        Modifica o valor do atraso na emissão, atualizando também o elemento interno.
+
+        Parameters
+        ----------
+        t0_emission : float, optional
+            Novo valor do atraso de emissão, em microssegundos. Se None, reseta para 0.0.
+        """
+        if t0_emission is None:
+            self._t0_emission = np.float32(0.0)
+        elif type(t0_emission) is np.float32 or type(t0_emission) is float:
+            self._t0_emission = np.float32(t0_emission)
+        else:
+            raise ValueError("t0_emission must be either a float [numpy.float32].")
+
+        # Propaga o novo atraso para o elemento circular.
+        self.elem.t0 = self._t0_emission
+
+    def get_receiver_points_count(self):
+        """
+        Retorna a quantidade de pontos receptores do transdutor.
+
+        Returns
+        -------
+        int
+            Número de pontos receptores. Retorna 0 se não for receptor.
+        """
+        if not self.receivers[0]:
+            return 0
+
+        # A contagem real depende do grid — usa sim_roi padrão como estimativa.
+        return self.elem.get_num_points_roi(SimulationROI(), simul_type="2D")
