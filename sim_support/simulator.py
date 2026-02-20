@@ -241,7 +241,7 @@ class Simulator:
                 ord_source = 1
 
         for _pr in self._probes:
-            if "linear" in p:
+            if "linear" or "mono" in p:
                 if self._source_env:
                     st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e')
                     _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")

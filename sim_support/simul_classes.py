@@ -1288,7 +1288,7 @@ class SimulationProbeMono(SimulationProbe):
 
         # Instancia o elemento circular único.
         # coord_center do elemento é zerado pois o offset do probe é aplicado em get_points_roi.
-        self.elem = ElementCirc(
+        self.elem_list = [ElementCirc(
             radius=radius,
             coord_center=np.zeros(3, dtype=np.float32),
             freq=freq,
@@ -1298,7 +1298,8 @@ class SimulationProbeMono(SimulationProbe):
             tx_en=self.emitters[0],
             rx_en=self.receivers[0],
             pulse_type=pulse_type
-        )
+            )
+        ]
 
         # Parâmetros gerais do transdutor.
         self._radius = np.float32(radius)
@@ -1338,151 +1339,90 @@ class SimulationProbeMono(SimulationProbe):
         Função que retorna a coordenada do ponto ativo do transdutor no grid de simulação,
         no formato vetorizado.
 
-        Returns
-        -------
-       
-        list 
-            Lista de índices do elemento fonte associado a cada ponto.
         """
-        if not isinstance(dir, str):
-            raise ValueError("'dir' must be a string")
+        arr_out = list()
+        idx_src = list()
+        for idx_st, e in enumerate(self.elem_list):
+            try:
+                arr_elem = e.get_points_roi(sim_roi=sim_roi, probe_center=self.coord_center,
+                                            simul_type=simul_type, dir=dir)
+                arr_out += arr_elem
+                if len(arr_elem):
+                    idx_src += [idx_st for _ in range(len(arr_elem))]
+            except IndexError:
+                pass
 
-        if (dir.lower() == "e" and not self.emitters[0]) or \
-           (dir.lower() == "r" and not self.receivers[0]):
-            return list(), list()
+        return arr_out, idx_src
 
-        arr_elem = self.elem.get_points_roi(
-            sim_roi=sim_roi,
-            probe_center=self.coord_center,
-            simul_type=simul_type,
-            dir=dir
-        )
-
-        idx_src = [0 for _ in range(len(arr_elem))]
-
-        return arr_elem, idx_src
-
-    def get_source_term(self, samples=1000, dt=1.0, out='r', ord_der=1):
+    def get_source_term(self, samples=1000, dt=1.0, out='r'):
         """
         Retorna o sinal do termo de fonte do transdutor.
 
-        Parameters
-        ----------
-        samples : int
-            Número de amostras de tempo na simulação.
-        dt : float
-            Valor do passo de tempo na simulação.
-        out : str
-            'r' para parte real (cosseno), 'e' para envelope.
-        ord_der : int
-            Ordem da derivada do pulso gaussiano (0, 1 ou 2).
-
-        Returns
-        -------
-        np.ndarray
-            Array com N amostras do sinal de excitação.
         """
         dec = int(abs(np.log10(dt))) + 2
         t = np.round(np.arange(samples, dtype=np.float32) * dt, decimals=dec)
-        ss = np.zeros(samples, dtype=flt32)
+        source_term = np.zeros((samples, self.num_elem), dtype=np.float32)
+        
+        for idx_st, e in enumerate(self.elem_list):
+            if e.tx_en:
+                source_term[:, idx_st] = e.get_element_exc_fn(t, out)
 
-        if self.emitters[0]:
-            if ord_der == 0:
-                gp, _, egp = gaussian_pulse(
-                    (t - self._t0_emission), fc=self._freq, bw=self._bw,
-                    retquad=True, retenv=True
-                )
-            elif ord_der == 2:
-                gp, _, egp = gaussian_second_dev_pulse(
-                    (t - self._t0_emission), fc=self._freq, bw=self._bw,
-                    retquad=True, retenv=True
-                )
-            else:
-                gp, _, egp = gaussian_first_dev_pulse(
-                    (t - self._t0_emission), fc=self._freq, bw=self._bw,
-                    retquad=True, retenv=True
-                )
-
-            eps = np.finfo(flt32).eps
-            if out == 'e':
-                egp[np.abs(egp) < eps] = 0.0
-                ss = flt32(egp)
-            else:
-                gp[np.abs(gp) < eps] = 0.0
-                ss = flt32(gp)
-
-        return flt32(self._gain * ss)
+        return source_term
 
     def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
         """
         Função que retorna um array com o índice do receptor para cada ponto da ROI que é um ponto receptor.
 
-        Parameters
-        ----------
-        sim_roi : SimulationROI
-            Região de interesse da simulação.
-        simul_type : str
-            Tipo de simulação: "2D" ou "3D".
-
-        Returns
-        -------
-        list of int
-            Lista com o índice do elemento receptor (sempre 0) para cada ponto receptor.
-            Retorna lista vazia se o elemento não é receptor.
         """
-        if not self.receivers[0]:
-            return list()
+        idx_rec = list()
+        for idx_st, e in enumerate(self.elem_list):
+            try:
+                arr_elem = e.get_points_roi(sim_roi=sim_roi, probe_center=self.coord_center,
+                                            simul_type=simul_type, dir='r')
+                if len(arr_elem):
+                    idx_rec += [idx_st for _ in range(len(arr_elem))]
+            except IndexError:
+                pass
 
-        arr_elem = self.elem.get_points_roi(
-            sim_roi=sim_roi,
-            probe_center=self.coord_center,
-            simul_type=simul_type,
-            dir='r'
-        )
-
-        return [0 for _ in range(len(arr_elem))]
+        return idx_rec
 
     def get_delay_rx(self):
         """
         Retorna o valor do atraso na recepção.
 
-        Returns
-        -------
-        list of float
-            Lista com o tempo de atraso de recepção, em microssegundos.
         """
-        return [self._t0_reception] if self.receivers[0] else list()
+        t0_recp = list()
+        t0_recp.append(self._t0_reception)
+
+        return t0_recp
 
     def set_t0(self, t0_emission=None):
         """
         Modifica o valor do atraso na emissão, atualizando também o elemento interno.
 
-        Parameters
-        ----------
-        t0_emission : float, optional
-            Novo valor do atraso de emissão, em microssegundos. Se None, reseta para 0.0.
         """
         if t0_emission is None:
-            self._t0_emission = np.float32(0.0)
+            self._t0_emission = np.zeros(self.num_elem, dtype=np.float32)
         elif type(t0_emission) is np.float32 or type(t0_emission) is float:
-            self._t0_emission = np.float32(t0_emission)
+            self._t0_emission = np.ones(self.num_elem, dtype=np.float32) * np.float32(t0_emission)
+        elif type(t0_emission) is list:
+            self._t0_emission = t0_emission
+            if len(self._t0_emission) < self.num_elem:
+                self._t0_emission += [0.0] * (self.num_elem - len(self._t0_emission))
+            elif len(self._t0_emission) > self.num_elem:
+                self._t0_emission = self._t0_emission[:self.num_elem]
+            self._t0_emission = np.array(self._t0_emission, dtype=np.float32)
+        elif type(t0_emission) is np.ndarray:
+            self._t0_emission = t0_emission
         else:
-            raise ValueError("t0_emission must be either a float [numpy.float32].")
+            raise ValueError("t0_emission must be either a float [numpy.float32] or a list of floats.")
 
-        # Propaga o novo atraso para o elemento circular.
-        self.elem.t0 = self._t0_emission
+        for idx_e, e in enumerate(self.elem_list):
+            e.t0 = self._t0_emission[idx_e]
 
     def get_receiver_points_count(self):
         """
         Retorna a quantidade de pontos receptores do transdutor.
 
-        Returns
-        -------
-        int
-            Número de pontos receptores. Retorna 0 se não for receptor.
         """
-        if not self.receivers[0]:
-            return 0
-
-        # A contagem real depende do grid — usa sim_roi padrão como estimativa.
-        return self.elem.get_num_points_roi(SimulationROI(), simul_type="2D")
+        return len(self.get_idx_rec(sim_roi=sim_roi, simul_type=simul_type))
