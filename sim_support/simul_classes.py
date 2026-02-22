@@ -1420,7 +1420,7 @@ class SimulationProbeMono(SimulationProbe):
         for idx_e, e in enumerate(self.elem_list):
             e.t0 = self._t0_emission[idx_e]
 
-    def get_receiver_points_count(self):
+    def get_receiver_points_count(self, simul_type="2D", sim_roi=SimulationROI() ):
         """
         Retorna a quantidade de pontos receptores do transdutor.
 
