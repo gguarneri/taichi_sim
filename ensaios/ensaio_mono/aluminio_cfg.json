@@ -11,7 +11,7 @@
       "len_pml_xmax" : 12,
       "len_pml_ymin" : 10,
       "len_pml_ymax" : 10,
-      "len_pml_zmin" : 1,
+      "len_pml_zmin" : 0,
       "len_pml_zmax" : 1,
       "rcoef_pml": 0.0001,
       "npower_pml": 2.0,
@@ -22,7 +22,7 @@
     {
       "mono": {
         "id": "mono01",
-        "radius": 3.175,
+        "radius": 0.25,
         "freq": 5.0,
         "bw": 0.5,
         "gain": 1e6,
@@ -32,9 +32,9 @@
           0.0,
           0.2
         ],
-        "emitter": "True",
+        "emitters": "True",
         "t0_emission": 1.5,
-        "receiver": "True",
+        "receivers": "True",
         "t0_reception": 0.0
       }
     }

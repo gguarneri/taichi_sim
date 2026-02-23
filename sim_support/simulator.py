@@ -11,7 +11,7 @@ import pyqtgraph as pg
 from sim_support import *
 from sim_support.emission_law import EmissionLaw
 from sim_support.windows_qt import Window
-from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint, SimulationProbeMono)   
+from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint, SimulationProbeMonoCirc)   
         
 
 class Simulator:
@@ -144,7 +144,7 @@ class Simulator:
             elif "point" in p:
                 self._probes.append(SimulationProbePoint(**p["point"], dec=self._roi.get_dec()))
             elif "mono" in p:
-                self._probes.append(SimulationProbeMono(**p["mono"], dec=self._roi.get_dec()))
+                self._probes.append(SimulationProbeMonoCirc(**p["mono"], dec=self._roi.get_dec()))
                 
             self._gain = max(self._gain, flt32(self._probes[idx_p]._gain) if hasattr(self._probes[idx_p], "_gain") else 0.0)
             
