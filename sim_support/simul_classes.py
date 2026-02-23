@@ -1181,7 +1181,7 @@ class SimulationProbePoint(SimulationProbe):
         """
         return 1 if self.receivers[0] else 0
 
-class SimulationProbeMono(SimulationProbe):
+class SimulationProbeMono(SimulationProbe):  # TODO: sugiro trocar para SimulationProbeMonoCirc, para ser mais específico, já que o formato do elemento é circular.
     """
     Classe contendo as configurações de um transdutor do tipo mono-elemento.
     É uma classe derivada de ``SimulationProbe``, específica para transdutores do tipo
@@ -1197,20 +1197,20 @@ class SimulationProbeMono(SimulationProbe):
             Número de casas decimais para arredondamento nos eixos (w, d, h).
             Por padrão, (2, 2, 2).
 
-        radius : int, float
-            Raio do elemento circular, em mm. Por padrão, é 0.25 mm.
+        radius : int, float  TODO: nao precisa, já que estará presente no elemento circular
+            Raio do elemento circular, em mm. Por padrão, é 0.25 mm.  TODO: as dimensoes dos elementos circulares sao em polegadas
 
-        freq : int, float
+        freq : int, float  TODO: nao precisa, já que estará presente no elemento circular
             Frequência central, em MHz. Por padrão, é 5 MHz.
 
-        bw : int, float
+        bw : int, float  TODO: nao precisa, já que estará presente no elemento circular
             Banda passante, em percentual da frequência central. Por padrão,
             é 0.5 (50%).
 
-        gain : int, float
+        gain : int, float  TODO: nao precisa, já que estará presente no elemento circular
             Ganho do elemento transdutor. Por padrão, é 1.0.
 
-        pulse_type : str
+        pulse_type : str  TODO: nao precisa, já que estará presente no elemento circular
             Tipo do pulso de excitação. O único tipo possível é: ``gaussian``.
             Por padrão, é ``gaussian``.
 
@@ -1225,26 +1225,26 @@ class SimulationProbeMono(SimulationProbe):
             String booleana indicando se o transdutor é receptor ("True" ou "False").
             Por padrão, é "False".
 
-        t0_emission : float, optional
+        t0_emission : float, optional  TODO: nao precisa, já que estará presente no elemento circular
             Atraso do sinal de emissão, em microssegundos. Por padrão, é 0.0.
 
-        t0_reception : float, optional
+        t0_reception : float, optional  TODO: nao precisa, já que estará presente no elemento circular
             Atraso do sinal de recepção, em microssegundos. Por padrão, é 0.0.
 
     Attributes
     ----------
         num_elem : int
-            Número de elementos. Sempre igual a 1 para este transdutor.
+            Número de elementos. Sempre igual a 1 para este transdutor.  TODO: nao precisa
 
         elem : :class:`ElementCirc`
             Objeto do tipo ``ElementCirc`` contendo as características físicas e
             elétricas do elemento ativo do transdutor.
 
         emitters : list of bool
-            Lista com flag indicando se o elemento é emissor.
+            Lista com flag indicando se o elemento é emissor. TODO: nao precisa
 
         receivers : list of bool
-            Lista com flag indicando se o elemento é receptor.
+            Lista com flag indicando se o elemento é receptor.  TODO: nao precisa
     """
 
     def __init__(self, coord_center=np.zeros((1, 3)), dec=(2, 2, 2),
@@ -1260,35 +1260,35 @@ class SimulationProbeMono(SimulationProbe):
         self._id = id
 
         # Número de elementos (sempre 1 para transdutor mono).
-        self.num_elem = 1
+        self.num_elem = 1  # TODO: pode retirar
 
-        # Lê a configuração se o transdutor é emissor.
+        # Lê a configuração se o transdutor é emissor.  TODO: pode retirar
         if type(emitter) is str:
             self.emitters = [eval(emitter.lower().capitalize())]
         else:
             raise ValueError("emitter must be a string")
 
-        # Lê a configuração se o transdutor é receptor.
+        # Lê a configuração se o transdutor é receptor.  TODO: pode retirar
         if type(receiver) is str:
             self.receivers = [eval(receiver.lower().capitalize())]
         else:
             raise ValueError("receiver must be a string")
 
         # Tempo de atraso para emissão.
-        if t0_emission is None:
+        if t0_emission is None:  # TODO: pode retirar, já que o elemento circular tem seu próprio t0_emission
             self._t0_emission = np.float32(0.0)
         else:
             self._t0_emission = np.float32(t0_emission)
 
         # Tempo de atraso para recepção.
-        if t0_reception is None:
+        if t0_reception is None:  # TODO: pode retirar, já que o elemento circular tem seu próprio t0_reception
             self._t0_reception = np.float32(0.0)
         else:
             self._t0_reception = np.float32(t0_reception)
 
         # Instancia o elemento circular único.
         # coord_center do elemento é zerado pois o offset do probe é aplicado em get_points_roi.
-        self.elem_list = [ElementCirc(
+        self.elem_list = [ElementCirc(      # TODO: nao precisa ser uma lista, pode ser um atributo direto do transdutor, ja que é mono-elemento
             radius=radius,
             coord_center=np.zeros(3, dtype=np.float32),
             freq=freq,
@@ -1301,7 +1301,7 @@ class SimulationProbeMono(SimulationProbe):
             )
         ]
 
-        # Parâmetros gerais do transdutor.
+        # Parâmetros gerais do transdutor.  TODO: podem ser retirados, já que estão presentes no elemento circular
         self._radius = np.float32(radius)
         self._freq = freq
         self._bw = bw
@@ -1321,7 +1321,7 @@ class SimulationProbeMono(SimulationProbe):
         numpy.float32
             Valor da frequência do transdutor.
         """
-        return np.float32(self._freq)
+        return np.float32(self._freq)  # TODO: pegue do elemento circular
 
     def get_coords(self):
         """
@@ -1334,7 +1334,7 @@ class SimulationProbeMono(SimulationProbe):
         """
         return self.coord_center
 
-    def get_points_roi(self, sim_roi=SimulationROI(), simul_type="2D", dir="e"):
+    def get_points_roi(self, sim_roi=SimulationROI(), simul_type="2D", dir="e"):  # TODO: colocar 3D por default
         """
         Função que retorna a coordenada do ponto ativo do transdutor no grid de simulação,
         no formato vetorizado.
@@ -1342,7 +1342,7 @@ class SimulationProbeMono(SimulationProbe):
         """
         arr_out = list()
         idx_src = list()
-        for idx_st, e in enumerate(self.elem_list):
+        for idx_st, e in enumerate(self.elem_list):  # TODO: elem nao sera lista
             try:
                 arr_elem = e.get_points_roi(sim_roi=sim_roi, probe_center=self.coord_center,
                                             simul_type=simul_type, dir=dir)
@@ -1363,19 +1363,19 @@ class SimulationProbeMono(SimulationProbe):
         t = np.round(np.arange(samples, dtype=np.float32) * dt, decimals=dec)
         source_term = np.zeros((samples, self.num_elem), dtype=np.float32)
         
-        for idx_st, e in enumerate(self.elem_list):
+        for idx_st, e in enumerate(self.elem_list):  # TODO: elem nao sera lista
             if e.tx_en:
                 source_term[:, idx_st] = e.get_element_exc_fn(t, out)
 
         return source_term
 
-    def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):
+    def get_idx_rec(self, sim_roi=SimulationROI(), simul_type="2D"):  # TODO: colocar 3D por default
         """
         Função que retorna um array com o índice do receptor para cada ponto da ROI que é um ponto receptor.
 
         """
         idx_rec = list()
-        for idx_st, e in enumerate(self.elem_list):
+        for idx_st, e in enumerate(self.elem_list):  # TODO: elem nao sera lista
             try:
                 arr_elem = e.get_points_roi(sim_roi=sim_roi, probe_center=self.coord_center,
                                             simul_type=simul_type, dir='r')
@@ -1394,14 +1394,14 @@ class SimulationProbeMono(SimulationProbe):
         t0_recp = list()
         t0_recp.append(self._t0_reception)
 
-        return t0_recp
+        return t0_recp  # TODO: pegue do elemento circular
 
     def set_t0(self, t0_emission=None):
         """
         Modifica o valor do atraso na emissão, atualizando também o elemento interno.
 
         """
-        if t0_emission is None:
+        if t0_emission is None:  # TODO: pode retirar, já que o elemento circular tem seu próprio t0_emission
             self._t0_emission = np.zeros(self.num_elem, dtype=np.float32)
         elif type(t0_emission) is np.float32 or type(t0_emission) is float:
             self._t0_emission = np.ones(self.num_elem, dtype=np.float32) * np.float32(t0_emission)
