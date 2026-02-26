@@ -74,10 +74,13 @@ class Simulator:
         # Escala do grid (valor do passo no espaco em milimetros)
         self._nx = self._roi.get_nx()
         self._ny = self._roi.get_nz()
+        self._nz = self._roi.get_ny()
         self._dx = self._roi.get_dx()
         self._dy = self._roi.get_dz()
+        self._dz = self._roi.get_dy()
         self._one_dx = flt32(1.0 / self._dx)
         self._one_dy = flt32(1.0 / self._dy)
+        self._one_dz = flt32(1.0/self._dz)
         
         # Inicializa os mapas de densidade do meio
         # rho_grid_vx e a matriz das densidades no mesmo grid de vx
@@ -182,28 +185,40 @@ class Simulator:
         
         # Perfil de amortecimento na direcao "x" dentro do grid
         a_x, b_x, k_x = self._roi.calc_pml_array(axis='x', grid='f', dt=self._dt, cp=cp_max, alpha_max=alpha_max_pml)
-        self._a_x = np.expand_dims(a_x.astype(flt32), axis=1)
-        self._b_x = np.expand_dims(b_x.astype(flt32), axis=1)
-        self._k_x = np.expand_dims(k_x.astype(flt32), axis=1)
+        self._a_x = np.expand_dims(a_x.astype(flt32), axis=(1, 2))
+        self._b_x = np.expand_dims(b_x.astype(flt32), axis=(1, 2))
+        self._k_x = np.expand_dims(k_x.astype(flt32), axis=(1, 2))
 
         # Perfil de amortecimento na direcao "x" dentro do meio grid (staggered grid)
         a_x_half, b_x_half, k_x_half = self._roi.calc_pml_array(axis='x', grid='h', dt=self._dt, cp=cp_max, alpha_max=alpha_max_pml)
-        self._a_x_half = np.expand_dims(a_x_half.astype(flt32), axis=1)
-        self._b_x_half = np.expand_dims(b_x_half.astype(flt32), axis=1)
-        self._k_x_half = np.expand_dims(k_x_half.astype(flt32), axis=1)
+        self._a_x_half = np.expand_dims(a_x_half.astype(flt32), axis=(1, 2))
+        self._b_x_half = np.expand_dims(b_x_half.astype(flt32), axis=(1, 2))
+        self._k_x_half = np.expand_dims(k_x_half.astype(flt32), axis=(1, 2))
 
         # Perfil de amortecimento na direcao "y" dentro do grid
         a_y, b_y, k_y = self._roi.calc_pml_array(axis='z', grid='f', dt=self._dt, cp=cp_max, alpha_max=alpha_max_pml)
-        self._a_y = np.expand_dims(a_y.astype(flt32), axis=0)
-        self._b_y = np.expand_dims(b_y.astype(flt32), axis=0)
-        self._k_y = np.expand_dims(k_y.astype(flt32), axis=0)
+        self._a_y = np.expand_dims(a_y.astype(flt32), axis=(0, 2))
+        self._b_y = np.expand_dims(b_y.astype(flt32), axis=(0, 2))
+        self._k_y = np.expand_dims(k_y.astype(flt32), axis=(0, 2))
 
         # Perfil de amortecimento na direcao "y" dentro do meio grid (staggered grid)
         a_y_half, b_y_half, k_y_half = self._roi.calc_pml_array(axis='z', grid='h', dt=self._dt, cp=cp_max, alpha_max=alpha_max_pml)
-        self._a_y_half = np.expand_dims(a_y_half.astype(flt32), axis=0)
-        self._b_y_half = np.expand_dims(b_y_half.astype(flt32), axis=0)
-        self._k_y_half = np.expand_dims(k_y_half.astype(flt32), axis=0)
-        
+        self._a_y_half = np.expand_dims(a_y_half.astype(flt32), axis=(0, 2))
+        self._b_y_half = np.expand_dims(b_y_half.astype(flt32), axis=(0, 2))
+        self._k_y_half = np.expand_dims(k_y_half.astype(flt32), axis=(0, 2))
+
+        # Perfil de amortecimento na direcao "z" dentro do grid
+        a_z, b_z, k_z = self._roi.calc_pml_array(axis='y', grid='f', dt=self._dt, cp=cp_max, alpha_max=alpha_max_pml)
+        self._a_z = np.expand_dims(a_z.astype(flt32), axis=(0, 1))
+        self._b_z = np.expand_dims(b_z.astype(flt32), axis=(0, 1))
+        self._k_z = np.expand_dims(k_z.astype(flt32), axis=(0, 1))
+
+        # Perfil de amortecimento na direcao "z" dentro do meio grid (staggered grid)
+        a_z_half, b_z_half, k_z_half = self._roi.calc_pml_array(axis='y', grid='h', dt=self._dt, cp=cp_max, alpha_max=alpha_max_pml)
+        self._a_z_half = np.expand_dims(a_z_half.astype(flt32), axis=(0, 1))
+        self._b_z_half = np.expand_dims(b_z_half.astype(flt32), axis=(0, 1))
+        self._k_z_half = np.expand_dims(k_z_half.astype(flt32), axis=(0, 1))
+
         # Configuracao geral dos ensaios
         self._n_iter = self._configs.get("simul_configs",1).get("n_iter", 1)
         self._max_val_fields = flt32(self._configs.get("simul_configs", 100.0).get("max_val_fields", 100.0))
