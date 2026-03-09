@@ -150,7 +150,7 @@ class Simulator3D:
             elif "point" in p:
                 self._probes.append(SimulationProbePoint(**p["point"], dec=self._roi.get_dec()))
             elif "mono" in p:
-                 self._probes.append(SimulationProbePoint(**p["mono"], dec=self._roi.get_dec()))
+                 self._probes.append(SimulationProbeMonoCirc(**p["mono"], dec=self._roi.get_dec()))
 
             self._gain = max(self._gain, flt32(self._probes[idx_p]._gain) if hasattr(self._probes[idx_p], "_gain") else 0.0)
                 
@@ -261,6 +261,13 @@ class Simulator3D:
                 else:
                     st = _pr.get_source_term(samples=self._n_steps, dt=self._dt)
                     _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="3d")
+            elif "mono" in p:
+                if self._source_env:
+                    st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e')
+                    _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="3d")
+                else:
+                    st = _pr.get_source_term(samples=self._n_steps, dt=self._dt)
+                    _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="3d")
             else:
                 if self._source_env:
                     st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e', ord_der=ord_source)
@@ -316,8 +323,8 @@ class Simulator3D:
             z_pos = 100 + np.arange(3) * (nz + 50)
             if (sim_type == "viscoelastic" or "elastic"):
                 windows_gpu_data = [
-                    {"title": "Stress ZZ [GPU]", "geometry": (x_pos[0], y_pos[0], z_pos[0],
-                                                       self._roi.get_nx(), self._roi.get_ny(), self._roi.get_nz())},
+                    {"title": "Stress ZZ [GPU]", "geometry": (x_pos[0], z_pos[0],
+                                                       self._roi.get_nx(), self._roi.get_nz())},
                 ]
             else:
                 windows_gpu_data = [

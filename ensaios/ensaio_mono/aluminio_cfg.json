@@ -3,10 +3,10 @@
     {
       "height" : 50.6,
       "h_len" : 506,
-      "width" : 30.0,
-      "w_len" : 300,
-      "depth" : 0.0,
-      "d_len" : 1,
+      "width" : 15.0,
+      "w_len" : 150,
+      "depth" : 13.0,
+      "d_len" : 130,
       "len_pml_xmin" : 11,
       "len_pml_xmax" : 12,
       "len_pml_ymin" : 10,
@@ -28,12 +28,12 @@
         "gain": 1e6,
         "pulse_type": "gaussian",
         "coord_center": [
-          15.0,
-          0.0,
+          7.5,
+          6.5,
           0.2
         ],
         "emitters": "True",
-        "t0_emission": 1.5,
+        "t0_emission": 0.0,
         "receivers": "True",
         "t0_reception": 0.0
       }
@@ -50,6 +50,8 @@
   {
     "n_iter": 1,
     "show_anim": 1,
+    "max_val_fields": 10.0,
+    "min_val_fields": -10.0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
@@ -70,11 +72,8 @@
   },
   "specimen_params":
   {
-    "cp_map": "./ensaios/ensaio_mono/mono_maps/cp_al_300x506.npy",
     "cp": 6.393,
-    "cs_map": "./ensaios/ensaio_mono/mono_maps/cs_al_300x506.npy",
     "cs": 3.1965,
-    "rho_map": "./ensaios/ensaio_mono/mono_maps/rho_al_300x506.npy",
     "rho": 2700.0
   }
 }
