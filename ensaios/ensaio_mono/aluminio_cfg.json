@@ -25,7 +25,7 @@
         "radius": 0.25,
         "freq": 5.0,
         "bw": 0.5,
-        "gain": 1e6,
+        "gain": 1e2,
         "pulse_type": "gaussian",
         "coord_center": [
           7.5,
@@ -33,7 +33,7 @@
           0.2
         ],
         "emitters": "True",
-        "t0_emission": 0.0,
+        "t0_emission": 1.5,
         "receivers": "True",
         "t0_reception": 0.0
       }
@@ -41,8 +41,8 @@
   ],
   "simul_params":
   {
-    "time_steps": 20000,
-    "dt": 2e-3,
+    "time_steps": 25000,
+    "dt": 8e-3,
     "acc": 2,
     "it_display": 10
   },
@@ -50,8 +50,8 @@
   {
     "n_iter": 1,
     "show_anim": 1,
-    "max_val_fields": 10.0,
-    "min_val_fields": -10.0,
+    "max_val_fields": 100.0,
+    "min_val_fields": -100.0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
