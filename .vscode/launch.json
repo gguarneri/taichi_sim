@@ -190,7 +190,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/sim_taichi_elastic.py",
             "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/pedro/teste_pedro.json"
+            "args": "--config=${workspaceFolder}/pedro/teste_pedro.json"
         }
     ]
 }
