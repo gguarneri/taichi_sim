@@ -2,10 +2,10 @@
   "roi" :
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],
-      "height" : 70.0,
-      "h_len" : 700,
-      "width" : 50.0,
-      "w_len" : 550,
+      "height" : 55.0,
+      "h_len" : 550,
+      "width" : 70.0,
+      "w_len" : 700,
       "depth" : 0.0,
       "d_len" : 1,
       "len_pml_xmin" : 11,
