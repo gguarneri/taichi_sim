@@ -47,13 +47,16 @@ class SimulatorWebGPU(Simulator3D):
         # --------------------------------------------
         # Aqui comeca o codigo especifico do simulador
         # --------------------------------------------
+
+        self._idx_rec_teste = np.gcd(self._n_rec,64)
+
         # Cria o shader para calculo contido no arquivo ``shader_webgpu.wgsl''
         with open('shader_webgpu_3D_viscoelastic.wgsl') as shader_file:
             cshader_string = shader_file.read()
             cshader_string = cshader_string.replace('_WSX_', f'{self._wsx}')
             cshader_string = cshader_string.replace('_WSY_', f'{self._wsy}')
             cshader_string = cshader_string.replace('_WSZ_', f'{self._wsz}')
-            cshader_string = cshader_string.replace('_IDX_REC_OFFSET_', f'{self._idx_rec_offset}')
+            cshader_string = cshader_string.replace('_IDX_REC_OFFSET_', f'{self._idx_rec_teste}')
             cshader = self._device.create_shader_module(code=cshader_string)
 
         # Arrays com parametros para calculo da atenuacao
@@ -619,6 +622,7 @@ class SimulatorWebGPU(Simulator3D):
         ix_max = self._roi.get_ix_max()
         iz_min = self._roi.get_iz_min()
         iz_max = self._roi.get_iz_max()
+        n_sensor = (self._n_rec + self._idx_rec_teste - 1) // self._idx_rec_teste
 
         # Laco de tempo para execucao da simulacao
         t_gpu = time()
@@ -656,7 +660,7 @@ class SimulatorWebGPU(Simulator3D):
 
             # Ativa o pipeline de execucao do armazenamento dos sensores
             compute_pass.set_pipeline(compute_store_sensors_kernel)
-            compute_pass.dispatch_workgroups(1)
+            compute_pass.dispatch_workgroups(n_sensor)
 
             # Ativa o pipeline de atualizacao da amostra de tempo
             compute_pass.set_pipeline(compute_incr_it_kernel)

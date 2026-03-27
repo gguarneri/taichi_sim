@@ -1761,8 +1761,8 @@ fn velocity_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
     let idx_src_term: i32 = get_idx_source_term(x, y, z);
     if(idx_src_term != -1 && rho > 0.0) {
         let val_src: f32 = get_source_term(sim_int_par.it, idx_src_term);
-        let vy: f32 = get_vy(x, y, z) +  val_src * dt / rho;
-        set_vy(x, y, z, vy);
+        let vz: f32 = get_vz(x, y, z) +  val_src * dt / rho;
+        set_vz(x, y, z, vz);
     }
 
     // Compute velocity norm L2
@@ -1822,12 +1822,14 @@ fn finish_it_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
 
 // Kernel to store sensors velocity
 @compute
-@workgroup_size(idx_rec_offset)
+@workgroup_size(idx_rec_offset, 1, 1)
 fn store_sensors_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
-    let sensor: i32 = i32(index.x);          // x thread index
+    let sensor: i32 = i32(index.x);
+    
+    if (sensor >= sim_int_par.n_rec_el) { return; }
+
     let it: i32 = sim_int_par.it;
 
-    // Store sensors velocities
     for(var pt: i32 = get_offset_sensor(sensor); get_idx_sensor(pt) == sensor; pt++) {
         if(it >= get_delay_rec(sensor)) {
             let x: i32 = get_idx_x_sensor(pt);
