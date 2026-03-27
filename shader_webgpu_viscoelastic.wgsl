@@ -971,7 +971,7 @@ fn sigma_kernel(@builtin(global_invocation_id) index: vec3<u32>) {
                 set_r_xy(x,y,_l,r_xy);
         }
 
-            sigmaxy = get_sigmaxy(x, y) + (mu * (vdvy_dx + vdvx_dy) + 0.5 * sum_r_xy) * dt;
+            sigmaxy = get_sigmaxy(x, y) + (mu * (vdvy_dx + vdvx_dy) + 0.5 * mu * sum_r_xy) * dt;
         }
         else {
             sigmaxy = get_sigmaxy(x, y) + (vdvx_dy + vdvy_dx) * mu * dt;
