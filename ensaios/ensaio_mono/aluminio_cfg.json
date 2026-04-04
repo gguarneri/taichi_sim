@@ -41,7 +41,7 @@
   ],
   "simul_params":
   {
-    "time_steps": 6250,
+    "time_steps": 12500,
     "dt": 4e-3,
     "acc": 2,
     "it_display": 10
@@ -55,6 +55,9 @@
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
+    "bscan_xy":0,
+    "bscan_xz":1,
+    "bscan_yz":0,
     "show_debug": 1,
     "show_figs": 0,
     "plot_results": 0,
@@ -67,7 +70,7 @@
     "save_sources": 0,
     "source_env": 0,
     "results_dir": "./ensaios/ensaio_mono/results",
-    "viscoelastic_attn": 0
+    "viscoelastic_attn": 1
   },
   "specimen_params":
   {
