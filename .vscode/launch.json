@@ -174,7 +174,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/sim_webgpu_viscoelastic.py",
             "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aluminio_cfg.json"
+            "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aco_cfg.json"
         },
         {
             "name": "Bloquinho Mono 3D WebGPU-viscoelastic",
@@ -182,7 +182,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/sim_webgpu_3D_viscoelastic.py",
             "console": "integratedTerminal",
-            "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aluminio_cfg.json"
+            "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aco_cfg.json"
         },
         {
             "name": "BloquinhoAcoPedro-2D-TAICHI-elastic",

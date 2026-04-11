@@ -12,13 +12,13 @@ class AttenuationCoefficients:
         self._n_sls = 3
 
         self._kappa_coeffs = (
-            np.array([2.3183195804298614e-002, 4.5879690742179936e-003, 9.1870040362984834e-004], dtype=np.float32),# * 0.48 ,
-            np.array([2.2767696890764546e-002, 4.5367506354972902e-003, 9.0203872869258736e-004], dtype=np.float32) #* 0.48
+            np.array([1.1063680886151313E-007,3.1856366036932041E-008,9.2197868528094345E-009], dtype=np.float32),# * 0.48 ,
+            np.array([1.1026580338785149E-007,3.1830988624149110E-008,9.1888147513272412E-009], dtype=np.float32) #* 0.48
         )
 
         self._non_kappa_coeffs = (
-            np.array([2.3851313121087559e-002, 4.6706068163414900e-003, 9.4677570922160968e-004], dtype=np.float32),# * 0.48,
-            np.array([2.2613794698025876e-002, 4.5158937361154533e-003, 8.9594510015710547e-004], dtype=np.float32)# * 0.48
+            np.array([1.6007136049523215E-007,3.1849176860846836E-008,6.3419851645615403E-009], dtype=np.float32),# * 0.48,
+            np.array([1.5988027842097575E-007,3.1825778973240451E-008,6.3344086277835006E-009], dtype=np.float32)# * 0.48
         )
 
         self._tau_epsilon_p, self._tau_sigma_p = self._kappa_coeffs
@@ -28,6 +28,3 @@ class AttenuationCoefficients:
         alpha_s = self._tau_epsilon_s / self._tau_sigma_s
         self._sum_alpha_p = sum(alpha_p)
         self._sum_alpha_s = sum(alpha_s)
-
-
-  
