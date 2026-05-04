@@ -1,5 +1,4 @@
 .vscode/*
-!.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
@@ -225,7 +224,10 @@ __marimo__/
 
 # simulators analisys tests
 analise_completa
-ensaios
+ensaios/ponto/results
 images
 nsys_data
 smi_data
+logs
+detailed_results.csv
+summary_gpu_memory_times.tsv
