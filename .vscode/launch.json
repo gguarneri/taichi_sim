@@ -159,6 +159,38 @@
             "program": "${workspaceFolder}/sim_webgpu_unsplit.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/ensaios/ponto/ponto.json"
+        },
+        {
+            "name": "Bloquinho WebGPU-viscoelastic",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_webgpu_viscoelastic.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ensaio_tat/bloquinho_tat_cfg.json"
+        },
+        {
+            "name": "Bloquinho Mono 2D WebGPU-viscoelastic",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_webgpu_viscoelastic.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aco_cfg.json"
+        },
+        {
+            "name": "Bloquinho Mono 3D WebGPU-viscoelastic",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_webgpu_3D_viscoelastic.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aco_cfg.json"
+        },
+        {
+            "name": "BloquinhoAcoPedro-2D-TAICHI-elastic",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi_elastic.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/pedro/teste_pedro.json"
         }
     ]
 }

@@ -11,15 +11,16 @@ import pyqtgraph as pg
 from sim_support import *
 from sim_support.emission_law import EmissionLaw
 from sim_support.windows_qt import Window
-from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint)   
+from sim_support.simul_classes import (SimulationROI, SimulationProbeLinearArray, SimulationProbePoint, SimulationProbeMonoCirc)
         
 
 class Simulator:
-    def __init__(self, file_config, sim_model="split"):
+    def __init__(self, file_config, sim_model="split", sim_type= "acoustic"):
         self._app = None
         self._device = None
         self._name = "simulator"
         self._sim_model = sim_model
+        self._sim_type = sim_type
 
         # -----------------------
         # Leitura da configuracao no formato JSON
@@ -74,10 +75,13 @@ class Simulator:
         # Escala do grid (valor do passo no espaco em milimetros)
         self._nx = self._roi.get_nx()
         self._ny = self._roi.get_nz()
+        self._nz = self._roi.get_ny()
         self._dx = self._roi.get_dx()
         self._dy = self._roi.get_dz()
+        self._dz = self._roi.get_dy()
         self._one_dx = flt32(1.0 / self._dx)
         self._one_dy = flt32(1.0 / self._dy)
+        self._one_dz = flt32(1.0/self._dz)
         
         # Inicializa os mapas de densidade do meio
         # rho_grid_vx e a matriz das densidades no mesmo grid de vx
@@ -112,7 +116,20 @@ class Simulator:
                 self._cp_grid_vx = self._cp_map
             else:
                 raise ValueError(f'cp_map shape {self._cp_map.shape} e incompativel com a ROI')
-            
+
+        # cs_grid_vx e a matriz das velocidades transversais no mesmo grid de vx
+        self._cs_grid_vx = np.ones((self._nx, self._ny), dtype=flt32) * self._cs
+        if hasattr(self, "_cs_map"):
+            if self._cs_map.shape[0] < self._nx and self._cs_map.shape[1] < self._ny:
+                self._cs_grid_vx[self._roi.get_ix_min(): self._roi.get_ix_max(),
+                self._roi.get_iz_min(): self._roi.get_iz_max()] = self._cs_map
+            elif self._cs_map.shape[0] > self._nx and self._cs_map.shape[1] > self._ny:
+                self._cs_grid_vx = self._cs_map[:self._nx, :self._ny]
+            elif self._cs_map.shape[0] == self._nx and self._cs_map.shape[1] == self._ny:
+                self._cs_grid_vx = self._cs_map
+            else:
+                raise ValueError(f'cs_map shape {self._cs_map.shape} e incompativel com a ROI')
+
         # Verifica a condicao de estabilidade de Courant
         # R. Courant et K. O. Friedrichs et H. Lewy (1928)
         cp_max = max(self._cp_grid_vx.max(), self._cp)
@@ -130,6 +147,8 @@ class Simulator:
                 self._probes.append(SimulationProbeLinearArray(**p["linear"], dec=self._roi.get_dec()))
             elif "point" in p:
                 self._probes.append(SimulationProbePoint(**p["point"], dec=self._roi.get_dec()))
+            elif "mono" in p:
+                self._probes.append(SimulationProbeMonoCirc(**p["mono"], dec=self._roi.get_dec()))
                 
             self._gain = max(self._gain, flt32(self._probes[idx_p]._gain) if hasattr(self._probes[idx_p], "_gain") else 0.0)
             
@@ -226,12 +245,20 @@ class Simulator:
                 ord_source = 1
 
         for _pr in self._probes:
-            if self._source_env:
-                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e', ord_der=ord_source)
-                _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
+            if "linear" or "mono" in p:
+                if self._source_env:
+                    st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e')
+                    _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
+                else:
+                    st = _pr.get_source_term(samples=self._n_steps, dt=self._dt)
+                    _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
             else:
-                st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, ord_der=ord_source)
-                _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
+                if self._source_env:
+                    st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, out='e', ord_der=ord_source)
+                    _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
+                else:
+                    st = _pr.get_source_term(samples=self._n_steps, dt=self._dt, ord_der=ord_source)
+                    _, i_src = _pr.get_points_roi(sim_roi=self._roi, simul_type="2d")
             if len(i_src) > 0:
                 source_term.append(st)
                 idx_src += [np.array(_s) + self._idx_src_offset for _s in i_src]
@@ -275,10 +302,16 @@ class Simulator:
 
             x_pos = 200 + np.arange(3) * (nx + 50)
             y_pos = 100 + np.arange(3) * (ny + 50)
-            windows_gpu_data = [
-                {"title": "Pressure", "geometry": (x_pos[0], y_pos[0],
-                                                self._roi.get_nx(), self._roi.get_nz())},
-            ]
+            if (sim_type == "viscoelastic" or "elastic"):
+                windows_gpu_data = [
+                    {"title": "Stress YY [GPU]", "geometry": (x_pos[0], y_pos[0],
+                                                       self._roi.get_nx(), self._roi.get_nz())},
+                ]
+            else:
+                windows_gpu_data = [
+                    {"title": "Pressure", "geometry": (x_pos[0], y_pos[0],
+                                                    self._roi.get_nx(), self._roi.get_nz())},
+                ]
             self._windows_gpu = [Window(title=data["title"], geometry=data["geometry"]) for data in windows_gpu_data]
         else:
             self._app = None
@@ -361,80 +394,156 @@ class Simulator:
                     print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
 
                 # Plota o mapa de pressao
-                bscan_ref = np.load(os.path.join('ensaios', 'ponto', 'results', 'result_ref_unsplit_bscan_pressure.npy'))
-                if self._plot_results:
-                    pressure_sim_result = plt.figure()
-                    plt.title(f'{self._name} simulation pressure - law ({law})\n({self._nx}x{self._ny})')
-                    plt.imshow(results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
-                            self._roi.get_iz_min():self._roi.get_iz_max()].T,
-                            aspect='auto', cmap='gray',
-                            extent=(self._roi.w_points[0], self._roi.w_points[-1],
-                                    self._roi.h_points[-1], self._roi.h_points[0]))
-                    plt.colorbar()
+                if self._sim_type == "acoustic":
+                    bscan_ref = np.load(os.path.join('ensaios', 'ponto', 'results', 'result_ref_unsplit_bscan_pressure.npy'))
+                    if self._plot_results:
+                        pressure_sim_result = plt.figure()
+                        plt.title(f'{self._name} simulation pressure - law ({law})\n({self._nx}x{self._ny})')
+                        plt.imshow(results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
+                                self._roi.get_iz_min():self._roi.get_iz_max()].T,
+                                aspect='auto', cmap='gray',
+                                extent=(self._roi.w_points[0], self._roi.w_points[-1],
+                                        self._roi.h_points[-1], self._roi.h_points[0]))
+                        plt.colorbar()
 
-                    if self._show_figs:
-                        plt.show(block=False)
-                        
-                    # Salva a imagem do campo de pressao
-                    if self._save_results:
-                        pressure_sim_result.savefig(name + '_field_pressure.png')
+                        if self._show_figs:
+                            plt.show(block=False)
 
-                # Salva o campo de pressao
-                if self._save_results and self._save_field:
-                    np.save(name + '_field_pressure', results_dict["pressure"])
+                        # Salva a imagem do campo de pressao
+                        if self._save_results:
+                            pressure_sim_result.savefig(name + '_field_pressure.png')
 
-                # Plota individualmente os sinais tomados no sensores
-                if self._plot_sensors:
-                    for r in range(results_dict["sens_pressure"].shape[1]):
-                        sensor_pressure_result = plt.figure()
-                        plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
-                        plt.plot(results_dict["sens_pressure"][:, r], label='simulated')
-                        plt.plot(bscan_ref, label='reference')
-                        plt.legend()
-                        
-                        # Pega a coordenada do primeiro emissor
-                        for _pr in self._probes:
-                            if all(val is True for val in _pr.emitters):
-                                coord_emitter = _pr.coord_center
-                                t0_emission = _pr._t0_emission
-                                break
-                                
-                        # Pega a coordenada do primeiro receptor
-                        for _pr in self._probes:
-                            if all(val is True for val in _pr.receivers):
-                                coord_receiver = _pr.coord_center
-                                break
-                            
-                        rd = np.sqrt(np.sum((coord_emitter - coord_receiver)**2))
-                        td = rd / self._cp + t0_emission
-                        ntd = td / self._dt
-                        plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]),
-                                              np.max(results_dict["sens_pressure"][:, r])],
-                                 label="Posição esperada eco")
-                        
-                        # Salva a imagem do sensor
-                        if self._save_sensors:
+                    # Salva o campo de pressao
+                    if self._save_results and self._save_field:
+                        np.save(name + '_field_pressure', results_dict["pressure"])
+
+                    # Plota individualmente os sinais tomados no sensores
+                    if self._plot_sensors:
+                        for r in range(results_dict["sens_pressure"].shape[1]):
+                            sensor_pressure_result = plt.figure()
+                            plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
+                            plt.plot(results_dict["sens_pressure"][:, r], label='simulated')
+                            plt.plot(bscan_ref, label='reference')
+                            plt.legend()
+
+                            # Pega a coordenada do primeiro emissor
+                            for _pr in self._probes:
+                                if all(val is True for val in _pr.emitters):
+                                    coord_emitter = _pr.coord_center
+                                    t0_emission = _pr._t0_emission
+                                    break
+
+                            # Pega a coordenada do primeiro receptor
+                            for _pr in self._probes:
+                                if all(val is True for val in _pr.receivers):
+                                    coord_receiver = _pr.coord_center
+                                    break
+
+                            rd = np.sqrt(np.sum((coord_emitter - coord_receiver)**2))
+                            td = rd / self._cp + t0_emission
+                            ntd = td / self._dt
+                            plt.plot([ntd, ntd], [np.min(results_dict["sens_pressure"][:, r]),
+                                                  np.max(results_dict["sens_pressure"][:, r])],
+                                     label="Posição esperada eco")
+
+                            # Salva a imagem do sensor
+                            if self._save_sensors:
+                                    sensor_pressure_result.savefig(name + f'_sensor_{r}.png')
+
+                        if self._show_figs:
+                            plt.show(block=False)
+
+                    if self._plot_bscan:
+                        bscan_pressure_result = plt.figure()
+                        plt.title(f'{self._name} simulation B-scan Pressure - law({law})\n({self._nx}x{self._ny})')
+                        plt.imshow(results_dict["sens_pressure"], aspect='auto', cmap='viridis')
+                        plt.colorbar()
+
+                        if self._show_figs:
+                            plt.show(block=False)
+
+                        # Salva a imagem b-scan dos valores dos sensores de pressao
+                        if self._save_bscan:
+                            bscan_pressure_result.savefig(name + '_bscan_pressure.png')
+
+                    # Salva o array com os valores dos sensores de pressao
+                    if self._save_bscan:
+                        np.save(name + '_bscan_pressure', results_dict["sens_pressure"])
+                else:
+                    if self._plot_results:
+                        stress_sim_result = plt.figure()
+                        plt.title(f'{self._name} simulation stress - law ({law})\n({self._nx}x{self._ny})')
+                        plt.imshow(results_dict["stress"][self._roi.get_ix_min():self._roi.get_ix_max(),
+                                   self._roi.get_iz_min():self._roi.get_iz_max()].T,
+                                   aspect='auto', cmap='gray',
+                                   extent=(self._roi.w_points[0], self._roi.w_points[-1],
+                                           self._roi.h_points[-1], self._roi.h_points[0]))
+                        plt.colorbar()
+
+                        if self._show_figs:
+                            plt.show(block=False)
+
+                        # Salva a imagem do campo de pressao
+                        if self._save_results:
+                            stress_sim_result.savefig(name + '_field_stress.png')
+
+                    # Salva o campo de estresse yy
+                    if self._save_results and self._save_field:
+                        np.save(name + '_field_stress_yy', results_dict["stress"])
+
+                    # Plota individualmente os sinais tomados no sensores
+                    if self._plot_sensors:
+                        for r in range(results_dict["sens_stress"].shape[1]):
+                            sensor_stress_result = plt.figure()
+                            plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
+                            plt.plot(results_dict["sens_stress"][:, r], label='simulated')
+                            # plt.plot(bscan_ref, label='reference')
+                            plt.legend()
+
+                            # Pega a coordenada do primeiro emissor
+                            for _pr in self._probes:
+                                if all(val is True for val in _pr.emitters):
+                                    coord_emitter = _pr.coord_center
+                                    t0_emission = _pr._t0_emission
+                                    break
+
+                            # Pega a coordenada do primeiro receptor
+                            for _pr in self._probes:
+                                if all(val is True for val in _pr.receivers):
+                                    coord_receiver = _pr.coord_center
+                                    break
+
+                            rd = np.sqrt(np.sum((coord_emitter - coord_receiver) ** 2))
+                            td = rd / self._cp + t0_emission
+                            ntd = td / self._dt
+                            plt.plot([ntd, ntd], [np.min(results_dict["sens_stress"][:, r]),
+                                                  np.max(results_dict["sens_stress"][:, r])],
+                                     label="Posição esperada eco")
+
+                            # Salva a imagem do sensor
+                            if self._save_sensors:
                                 sensor_pressure_result.savefig(name + f'_sensor_{r}.png')
 
-                    if self._show_figs:
-                        plt.show(block=False)
+                        if self._show_figs:
+                            plt.show(block=False)
 
-                if self._plot_bscan:
-                    bscan_pressure_result = plt.figure()
-                    plt.title(f'{self._name} simulation B-scan Pressure - law({law})\n({self._nx}x{self._ny})')
-                    plt.imshow(results_dict["sens_pressure"], aspect='auto', cmap='viridis')
-                    plt.colorbar()
+                    if self._plot_bscan:
+                        bscan_pressure_result = plt.figure()
+                        plt.title(f'{self._name} simulation B-scan Stress yy - law({law})\n({self._nx}x{self._ny})')
+                        plt.imshow(results_dict["sens_stress"], aspect='auto', cmap='viridis')
+                        plt.colorbar()
 
-                    if self._show_figs:
-                        plt.show(block=False)
+                        if self._show_figs:
+                            plt.show(block=False)
 
-                    # Salva a imagem b-scan dos valores dos sensores de pressao
+                        # Salva a imagem b-scan dos valores dos sensores de pressao
+                        if self._save_bscan:
+                            bscan_pressure_result.savefig(name + '_bscan_stress.png')
+
+                    # Salva o array com os valores dos sensores de pressao
                     if self._save_bscan:
-                        bscan_pressure_result.savefig(name + '_bscan_pressure.png')
-                
-                # Salva o array com os valores dos sensores de pressao        
-                if self._save_bscan:
-                    np.save(name + '_bscan_pressure', results_dict["sens_pressure"])
+                        np.save(name + '_bscan_stress', results_dict["sens_stress"])
+
 
         sim_times = np.array(sim_times)
         sim_total_times = np.array(sim_total_times)
