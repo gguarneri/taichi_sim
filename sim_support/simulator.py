@@ -395,7 +395,7 @@ class Simulator:
 
                 # Plota o mapa de pressao
                 if self._sim_type == "acoustic":
-                    bscan_ref = np.load(os.path.join('ensaios', 'ponto', 'results', 'result_ref_unsplit_bscan_pressure.npy'))
+                    # bscan_ref = np.load(os.path.join('ensaios', 'ponto', 'results', 'result_ref_unsplit_bscan_pressure.npy'))
                     if self._plot_results:
                         pressure_sim_result = plt.figure()
                         plt.title(f'{self._name} simulation pressure - law ({law})\n({self._nx}x{self._ny})')
@@ -423,7 +423,7 @@ class Simulator:
                             sensor_pressure_result = plt.figure()
                             plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
                             plt.plot(results_dict["sens_pressure"][:, r], label='simulated')
-                            plt.plot(bscan_ref, label='reference')
+                            # plt.plot(bscan_ref, label='reference')
                             plt.legend()
 
                             # Pega a coordenada do primeiro emissor
