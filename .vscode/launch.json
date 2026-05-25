@@ -185,10 +185,10 @@
             "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aco_cfg.json"
         },
         {
-            "name": "BloquinhoAcoPedro-2D-TAICHI-elastic",
+            "name": "BloquinhoAço-2D-TAICHI-viscoelastic",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/sim_taichi_elastic.py",
+            "program": "${workspaceFolder}/sim_webgpu_viscoelastic.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/pedro/teste_pedro.json"
         }
