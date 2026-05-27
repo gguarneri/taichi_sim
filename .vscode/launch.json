@@ -29,7 +29,15 @@
             "args": "--config=${workspaceFolder}/ensaios/ensaio_mono/aco_cfg.json"
         },
         {
-            "name": "BloquinhoAço-2D-TAICHI-viscoelastic",
+            "name": "TestePedro-2D-TAICHI-viscoelastic",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi_viscoelastic_2D.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/pedro/teste_pedro.json"
+        },
+        {
+            "name": "TestePedro-2D-WebGPU-viscoelastic",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/sim_webgpu_viscoelastic.py",

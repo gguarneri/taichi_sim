@@ -323,6 +323,10 @@ class Simulator:
         sim_times = list()
         sim_total_times = list()
         mse_values = list()
+        
+        # result_dir FORA do loop para estar disponível em todo o método
+        result_dir = self._results_dir if hasattr(self, "_results_dir") else os.path.join(".")
+        
         for n in range(self._n_iter):
             print(f'Iteracao {n}')
             n_laws = self._emission_laws.shape[0] if hasattr(self, "_emission_laws") else 1
@@ -343,58 +347,58 @@ class Simulator:
                 print(results_dict["gpu_str"])
                 print(f'{sim_times[-1]:.3}s')
                 print(f'Tempo total (inclui transferencia de dados): {sim_total_times[-1]:.3}s')
-                result_dir = self._results_dir if hasattr(self, "_results_dir") else os.path.join(".")
                 name = os.path.join(result_dir, f'result_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}_'
                         f'{self._nx}x{self._ny}_{self._n_steps}_iter_{n}_law_{law}')
 
-                # Energia refletida pela borda CPML
-                reflected = results_dict["sens_pressure"][self._n_steps - self.cpml_time, :]
-                reflected_energy = (reflected**2).sum()*self._dt
-                print(f"Energia refletida (sensor): {reflected_energy:.2}")
-
-                reflected_energy_field = (results_dict["pressure"]**2).sum()*self._dx*self._dy
-                print(f"Energia ultimo frame: {reflected_energy_field:.2}")
-                
-                # Compara o resultado com a referencia (CPU-broadcast)
-                try:
-                    # Compara o resultado do campo de pressao com o valor de referência
-                    pressure_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_field_pressure.npy"))[
-                                               self._roi.get_ix_min():self._roi.get_ix_max(),
-                                               self._roi.get_iz_min():self._roi.get_iz_max()]
-                    
-                    pressure = results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
-                            self._roi.get_iz_min():self._roi.get_iz_max()]
-                    if pressure_ref.shape == pressure.shape:
-                        error_pressure = pressure_ref - pressure
-                        mse_pressure = np.mean(error_pressure ** 2)
-                        if self._plot_error:
-                            pressure_err_fig = plt.figure()
-                            plt.title(f'{self._name} simulation pressure error - law ({law})\n({self._nx}x{self._ny})')
-                            plt.imshow(error_pressure, aspect='auto', cmap='gray',
-                                       extent=(self._roi.w_points[0], self._roi.w_points[-1],
-                                               self._roi.h_points[-1], self._roi.h_points[0])
-                                       )
-                            plt.colorbar()
-                    else:
-                        mse_pressure = np.inf
-
-                    # Compara o resultado dos sensores de pressao com o valores de referência
-                    sens_pressure_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_bscan_pressure.npy"))
-                    sens_pressure = results_dict["sens_pressure"]
-                    if sens_pressure_ref.shape == sens_pressure.shape:
-                        mse_sens_pressure = np.mean((sens_pressure_ref - sens_pressure) ** 2)
-                    else:
-                        mse_sens_pressure = np.inf
-                        
-                    print(f"MSE do campo de pressao em relacao a referencia: {mse_pressure:.4}")
-                    print(f"MSE dos sensores de pressao em relacao a referencia: {mse_sens_pressure:.4}")
-                    mse_values.append([mse_pressure, mse_sens_pressure])
-                        
-                except FileNotFoundError as err:
-                    print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
-
-                # Plota o mapa de pressao
+                # ESTRUTURA DE CONTROLE POR TIPO DE SIMULAÇÃO
+                # Verifica o tipo de simulação PRIMEIRO, depois acessa as chaves corretas
                 if self._sim_type == "acoustic":
+                    # Código de energia está DENTRO do bloco acústico
+                    reflected = results_dict["sens_pressure"][self._n_steps - self.cpml_time, :]
+                    reflected_energy = (reflected**2).sum()*self._dt
+                    print(f"Energia refletida (sensor): {reflected_energy:.2}")
+
+                    reflected_energy_field = (results_dict["pressure"]**2).sum()*self._dx*self._dy
+                    print(f"Energia ultimo frame: {reflected_energy_field:.2}")
+
+                    # Compara o resultado com a referencia (CPU-broadcast)
+                    try:
+                        # Compara o resultado do campo de pressao com o valor de referência
+                        pressure_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_field_pressure.npy"))[
+                                                   self._roi.get_ix_min():self._roi.get_ix_max(),
+                                                   self._roi.get_iz_min():self._roi.get_iz_max()]
+
+                        pressure = results_dict["pressure"][self._roi.get_ix_min():self._roi.get_ix_max(),
+                                self._roi.get_iz_min():self._roi.get_iz_max()]
+                        if pressure_ref.shape == pressure.shape:
+                            error_pressure = pressure_ref - pressure
+                            mse_pressure = np.mean(error_pressure ** 2)
+                            if self._plot_error:
+                                pressure_err_fig = plt.figure()
+                                plt.title(f'{self._name} simulation pressure error - law ({law})\n({self._nx}x{self._ny})')
+                                plt.imshow(error_pressure, aspect='auto', cmap='gray',
+                                           extent=(self._roi.w_points[0], self._roi.w_points[-1],
+                                                   self._roi.h_points[-1], self._roi.h_points[0])
+                                           )
+                                plt.colorbar()
+                        else:
+                            mse_pressure = np.inf
+
+                        # Compara o resultado dos sensores de pressao com o valores de referência
+                        sens_pressure_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_bscan_pressure.npy"))
+                        sens_pressure = results_dict["sens_pressure"]
+                        if sens_pressure_ref.shape == sens_pressure.shape:
+                            mse_sens_pressure = np.mean((sens_pressure_ref - sens_pressure) ** 2)
+                        else:
+                            mse_sens_pressure = np.inf
+
+                        print(f"MSE do campo de pressao em relacao a referencia: {mse_pressure:.4}")
+                        print(f"MSE dos sensores de pressao em relacao a referencia: {mse_sens_pressure:.4}")
+                        mse_values.append([mse_pressure, mse_sens_pressure])
+
+                    except FileNotFoundError as err:
+                        print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
+
                     # bscan_ref = np.load(os.path.join('ensaios', 'ponto', 'results', 'result_ref_unsplit_bscan_pressure.npy'))
                     if self._plot_results:
                         pressure_sim_result = plt.figure()
@@ -470,6 +474,14 @@ class Simulator:
                     if self._save_bscan:
                         np.save(name + '_bscan_pressure', results_dict["sens_pressure"])
                 else:
+                    # Acessa "sens_stress" e "stress" (chaves que existem para simulações viscoelásticas)
+                    reflected = results_dict["sens_stress"][self._n_steps - self.cpml_time, :]
+                    reflected_energy = (reflected**2).sum()*self._dt
+                    print(f"Energia refletida (sensor): {reflected_energy:.2}")
+
+                    reflected_energy_field = (results_dict["stress"]**2).sum()*self._dx*self._dy
+                    print(f"Energia ultimo frame: {reflected_energy_field:.2}")
+
                     if self._plot_results:
                         stress_sim_result = plt.figure()
                         plt.title(f'{self._name} simulation stress - law ({law})\n({self._nx}x{self._ny})')
@@ -494,6 +506,7 @@ class Simulator:
                     # Plota individualmente os sinais tomados no sensores
                     if self._plot_sensors:
                         for r in range(results_dict["sens_stress"].shape[1]):
+                            # Renomeado de "sensor_pressure_result" para "sensor_stress_result", que é mais intuitivo
                             sensor_stress_result = plt.figure()
                             plt.title(f'{self._name} - Receptor {r + 1} - law ({law})')
                             plt.plot(results_dict["sens_stress"][:, r], label='simulated')
@@ -522,13 +535,15 @@ class Simulator:
 
                             # Salva a imagem do sensor
                             if self._save_sensors:
-                                sensor_pressure_result.savefig(name + f'_sensor_{r}.png')
+                                sensor_stress_result.savefig(name + f'_sensor_{r}.png')
 
                         if self._show_figs:
                             plt.show(block=False)
 
                     if self._plot_bscan:
-                        bscan_pressure_result = plt.figure()
+                        # Renomeado de "bscan_pressure_result" para "bscan_stress_result"
+                        
+                        bscan_stress_result = plt.figure()
                         plt.title(f'{self._name} simulation B-scan Stress yy - law({law})\n({self._nx}x{self._ny})')
                         plt.imshow(results_dict["sens_stress"], aspect='auto', cmap='viridis')
                         plt.colorbar()
@@ -536,9 +551,9 @@ class Simulator:
                         if self._show_figs:
                             plt.show(block=False)
 
-                        # Salva a imagem b-scan dos valores dos sensores de pressao
+                        # Salva a imagem b-scan dos valores dos sensores de stress
                         if self._save_bscan:
-                            bscan_pressure_result.savefig(name + '_bscan_stress.png')
+                            bscan_stress_result.savefig(name + '_bscan_stress.png')
 
                     # Salva o array com os valores dos sensores de pressao
                     if self._save_bscan:
