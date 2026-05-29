@@ -69,7 +69,7 @@
     "save_sources": 1,
     "source_env": 1,
     "emission_laws": "./",
-    "results_dir": "./pedro/results/",
+    "results_dir": "./pedro/results/results_taichi",
     "viscoelastic_attn": 0
   },
   "specimen_params":
