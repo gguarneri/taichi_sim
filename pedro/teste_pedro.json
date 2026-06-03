@@ -2,8 +2,8 @@
   "roi" :
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],
-      "height" : 55.0,
-      "h_len" : 550,
+      "height" : 50.0,
+      "h_len" : 500,
       "width" : 70.0,
       "w_len" : 700,
       "depth" : 0.0,
@@ -34,7 +34,7 @@
         "coord_center": [
           35.0,
           0.0,
-          0.0
+          0.3
         ],
         "emitters": "all",
         "t0_emission": 1.5,
@@ -47,29 +47,29 @@
   {
     "time_steps": 10000,
     "dt": 2e-3,
-    "acc": 2,
+    "acc": 4,
     "it_display": 10
   },
   "simul_configs":
   {
-    "n_iter": 1,
+    "n_iter": 15,
     "show_anim": 0,
     "show_xy": 0,
     "show_xz": 1,
     "show_yz": 0,
     "show_debug": 0,
-    "show_figs": 1,
-    "plot_results": 1,
-    "plot_sensors": 1,
-    "plot_bscan": 1,
+    "show_figs": 0,
+    "plot_results": 0,
+    "plot_sensors": 0,
+    "plot_bscan": 0,
     "save_results": 1,
-    "save_sensors": 1,
+    "save_sensors": 0,
     "save_field": 1,
     "save_bscan": 1,
-    "save_sources": 1,
+    "save_sources": 0,
     "source_env": 1,
     "emission_laws": "./",
-    "results_dir": "./pedro/results/results_taichi",
+    "results_dir": "./pedro/results",
     "viscoelastic_attn": 0
   },
   "specimen_params":

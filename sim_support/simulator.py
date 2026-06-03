@@ -481,7 +481,47 @@ class Simulator:
 
                     reflected_energy_field = (results_dict["stress"]**2).sum()*self._dx*self._dy
                     print(f"Energia ultimo frame: {reflected_energy_field:.2}")
+                    
+                    # Compara o resultado com a referencia (assim como no caso acústico) 
+                    try:
+                        # Compara o resultado do campo de stress com o valor de referência
+                        stress_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_field_stress.npy"))[
+                                                   self._roi.get_ix_min():self._roi.get_ix_max(),
+                                                   self._roi.get_iz_min():self._roi.get_iz_max()]
 
+                        stress = results_dict["stress"][self._roi.get_ix_min():self._roi.get_ix_max(),
+                                self._roi.get_iz_min():self._roi.get_iz_max()]
+                        if stress_ref.shape == stress.shape:
+                            error_stress = stress_ref - stress
+                            mse_stress = np.mean(error_stress ** 2)
+                            if self._plot_error:
+                                stress_err_fig = plt.figure()
+                                plt.title(f'{self._name} simulation stress error - law ({law})\n({self._nx}x{self._ny})')
+                                plt.imshow(error_stress, aspect='auto', cmap='gray',
+                                           extent=(self._roi.w_points[0], self._roi.w_points[-1],
+                                                   self._roi.h_points[-1], self._roi.h_points[0])
+                                           )
+                                plt.colorbar()
+                        else:
+                            mse_stress = np.inf
+
+                        # Compara o resultado dos sensores de stress com os valores de referência
+                        sens_stress_ref = np.load(os.path.join(result_dir, f"result_ref_{self._sim_model}_bscan_stress.npy"))
+                        sens_stress = results_dict["sens_stress"]
+                        if sens_stress_ref.shape == sens_stress.shape:
+                            mse_sens_stress = np.mean((sens_stress_ref - sens_stress) ** 2)
+                        else:
+                            mse_sens_stress = np.inf
+
+                        print(f"MSE do campo de stress em relacao a referencia: {mse_stress:.4}")
+                        print(f"MSE dos sensores de stress em relacao a referencia: {mse_sens_stress:.4}")
+                        mse_values.append([mse_stress, mse_sens_stress])
+
+                    except FileNotFoundError as err:
+                        print(f"Arquivo {err} nao encontrado. Nao pode ser feita a comparacao com a referencia.")
+                        
+                    
+                    # Condicionais para salvar resultados 
                     if self._plot_results:
                         stress_sim_result = plt.figure()
                         plt.title(f'{self._name} simulation stress - law ({law})\n({self._nx}x{self._ny})')
@@ -570,8 +610,8 @@ class Simulator:
             print(f'Tempo medio total (inclui transferencia de dados): {sim_total_times[5:].mean():.3}s (std = {sim_total_times[5:].std():.4})')
             
         if self._n_iter > 5 and mse_values.shape[0] > 5:
-            print(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4} (std = {mse_values[5:, 0].std():.4})')
-            print(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4} (std = {mse_values[5:, 1].std():.4})')
+            print(f'MSE medio do campo: {mse_values[5:, 0].mean():.4} (std = {mse_values[5:, 0].std():.4})')
+            print(f'MSE medio dos sensores: {mse_values[5:, 1].mean():.4} (std = {mse_values[5:, 1].std():.4})')
 
         if self._save_sources:
             name = os.path.join(result_dir, f'sources_{self._name}_{now.strftime("%Y%m%d-%H%M%S")}')
@@ -602,16 +642,16 @@ class Simulator:
                     f.write(f'Tempo medio total (inclui transferencia de dados): {sim_total_times[5:].mean():.3}s\n')
                     f.write(f'Desvio padrao: {sim_total_times[5:].std():.4}\n')
                     if mse_values.shape[0] > 5:
-                        f.write(f'MSE medio do campo de pressao: {mse_values[5:, 0].mean():.4}\n')
+                        f.write(f'MSE medio do campo: {mse_values[5:, 0].mean():.4}\n')
                         f.write(f'Desvio padrao: {mse_values[5:, 0].std():.4}\n')
-                        f.write(f'MSE medio dos sensores de pressao: {mse_values[5:, 1].mean():.4}\n')
+                        f.write(f'MSE medio dos sensores: {mse_values[5:, 1].mean():.4}\n')
                         f.write(f'Desvio padrao: {mse_values[5:, 1].std():.4}\n')
                 else:
                     f.write(f'Tempo execucao: {sim_times[-1]:.3}s\n')
                     f.write(f'Tempo total (inclui transferencia de dados): {sim_total_times[-1]:.3}s\n')
                     if mse_values.shape[0] > 0:
-                        f.write(f'MSE do campo de pressao: {mse_values[-1, 0]:.4}\n')
-                        f.write(f'MSE medio dos sensores de pressao: {mse_values[-1, 1]:.4}\n')
+                        f.write(f'MSE do campo: {mse_values[-1, 0]:.4}\n')
+                        f.write(f'MSE medio dos sensores: {mse_values[-1, 1]:.4}\n')
 
         if self._show_figs:
             plt.show(block=False)
