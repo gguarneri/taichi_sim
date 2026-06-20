@@ -1,0 +1,19 @@
+Parametros do ensaio
+--------------------
+
+Simulador: Taichi-viscoelastic
+Modelo do simulador: split
+Quantidade de iteracoes no tempo: 1000
+Tamanho da ROI: 729x526
+GPU: cuda
+Numero de simulacoes: 20
+Energia refletida (sensor): 0.0
+Energia ultimo frame: 1.8e+04
+Tempo medio de execucao: 0.627s
+Desvio padrao: 0.004558
+Tempo medio total (inclui transferencia de dados): 1.41s
+Desvio padrao: 0.009746
+MSE medio do campo: 4.93
+Desvio padrao: 0.0
+MSE medio dos sensores: inf
+Desvio padrao: nan

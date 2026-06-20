@@ -45,14 +45,14 @@
   ],
   "simul_params":
   {
-    "time_steps": 10000,
+    "time_steps": 1000,
     "dt": 2e-3,
     "acc": 4,
     "it_display": 10
   },
   "simul_configs":
   {
-    "n_iter": 15,
+    "n_iter": 20,
     "show_anim": 0,
     "show_xy": 0,
     "show_xz": 1,

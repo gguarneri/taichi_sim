@@ -43,6 +43,14 @@
             "program": "${workspaceFolder}/sim_webgpu_viscoelastic.py",
             "console": "integratedTerminal",
             "args": "--config=${workspaceFolder}/pedro/teste_pedro.json"
+        },
+        {
+            "name": "TestePedro-2D-HenriqueTaichi-elastic",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_taichi_elastic.py",
+            "console": "integratedTerminal",
+            "args": "--config=${workspaceFolder}/pedro/teste_pedro.json"
         }
     ]
 }
