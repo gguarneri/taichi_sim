@@ -1,0 +1,108 @@
+"""
+Compara os tempos de execução de até 3 simulações (arquivos .csv) do simulador
+de ondas, calcula a média (e desvio padrão) de cada arquivo e plota um gráfico
+de barras comparativo.
+
+Formato esperado de cada .csv: uma única coluna de números (tempos, em segundos),
+sem cabeçalho, uma medição por linha (como nos arquivos enviados).
+
+Uso:
+    python comparar_tempos.py arquivo1.csv arquivo2.csv arquivo3.csv
+
+Se nenhum argumento for passado, o script usa os 3 caminhos definidos
+na seção "CONFIGURAÇÃO" abaixo -- basta editar os caminhos e/ou os rótulos.
+"""
+
+import csv
+import statistics as stats
+import matplotlib.pyplot as plt
+
+# ----------------------- CONFIGURAÇÃO -----------------------
+# Edite aqui os caminhos dos arquivos e os rótulos que aparecerão no gráfico,
+# caso prefira não passar os arquivos via linha de comando.
+ARQUIVOS_PADRAO = [
+    "taichi_sim/pedro/results/results_taichi_gpu/result_Taichi-viscoelastic_20260618-135229_729x526_1000_iter_19_GPU_.csv",
+    "taichi_sim/pedro/results/results_taichi_cpu/result_Taichi-viscoelastic_20260618-135450_729x526_1000_iter_19_GPU_.csv",
+    "taichi_sim/pedro/results/results_webgpu/result_WebGPU-viscoelastic_20260618-141538_729x526_1000_iter_19_GPU_.csv",
+]
+
+# Se None, o rótulo é gerado automaticamente a partir do nome do arquivo.
+ROTULOS_PADRAO = [
+    "Taichi CPU ",
+    "Taichi GPU ",
+    "WebGPU",
+]
+# --------------------------------------------------------------
+
+
+def ler_tempos(caminho_csv):
+    """Lê um arquivo .csv de coluna única e retorna a lista de tempos (float)."""
+    tempos = []
+    with open(caminho_csv, newline="", encoding="utf-8") as f:
+        leitor = csv.reader(f)
+        for linha in leitor:
+            if not linha:
+                continue
+            valor = linha[0].strip()
+            if valor == "":
+                continue
+            try:
+                tempos.append(float(valor))
+            except ValueError:
+                # ignora possíveis cabeçalhos/linhas não numéricas
+                continue
+    if not tempos:
+        raise ValueError(f"Nenhum valor numérico encontrado em: {caminho_csv}")
+    return tempos
+
+
+def gerar_rotulo(caminho):
+    """Gera um rótulo curto a partir do nome do arquivo."""
+    nome = caminho.split("/")[-1]
+    return nome.replace(".csv", "")
+
+
+def main():
+    caminhos = ARQUIVOS_PADRAO
+    rotulos = ROTULOS_PADRAO if ROTULOS_PADRAO else [gerar_rotulo(c) for c in caminhos]
+
+    dados = []  # lista de (rotulo, lista_de_tempos)
+    for caminho, rotulo in zip(caminhos, rotulos):
+        tempos = ler_tempos(caminho)
+        dados.append((rotulo, tempos))
+
+    # --------- Estatísticas ---------
+    medias = []
+    desvios = []
+    print("\nResumo dos tempos (segundos):")
+    print(f"{'Arquivo':40s} {'N':>4s} {'Média':>10s} {'DesvPad':>10s} {'Mín':>10s} {'Máx':>10s}")
+    for rotulo, tempos in dados:
+        media = stats.mean(tempos)
+        desvio = stats.stdev(tempos) if len(tempos) > 1 else 0.0
+        medias.append(media)
+        desvios.append(desvio)
+        print(f"{rotulo:40s} {len(tempos):4d} {media:10.4f} {desvio:10.4f} "
+              f"{min(tempos):10.4f} {max(tempos):10.4f}")
+
+    # --------- Gráfico ---------
+    fig, (ax1) = plt.subplots(1, figsize=(13, 5.5))
+
+    # (1) Gráfico de barras com a média (+ desvio padrão) de cada arquivo
+    cores = ["#4C72B0", "#DD8452", "#55A868"]
+    barras = ax1.bar(
+        [r for r, _ in dados],
+        medias,
+        yerr=desvios,
+        capsize=6,
+        color=cores[: len(dados)],
+    )
+    ax1.set_ylabel("Tempo médio (s)")
+    ax1.set_title("Comparação do tempo médio de simulação")
+    ax1.bar_label(barras, fmt="%.3f", padding=3)
+    ax1.tick_params(axis="x", rotation=15)
+    ax1.grid(axis="y", linestyle="--", alpha=0.4)
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
