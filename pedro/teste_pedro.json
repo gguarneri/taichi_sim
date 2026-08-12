@@ -2,18 +2,18 @@
   "roi" :
     {
       "coord_ref" : [[0.0, 0.0, 0.0]],
-      "height" : 50.0,
-      "h_len" : 500,
-      "width" : 70.0,
-      "w_len" : 700,
+      "height" : 48.0,
+      "h_len" : 480,
+      "width" : 72.0,
+      "w_len" : 720,
       "depth" : 0.0,
       "d_len" : 1,
-      "len_pml_xmin" : 11,
-      "len_pml_xmax" : 12,
+      "len_pml_xmin" : 13,
+      "len_pml_xmax" : 13,
       "len_pml_ymin" : 10,
       "len_pml_ymax" : 10,
-      "len_pml_zmin" : 10,
-      "len_pml_zmax" : 10,
+      "len_pml_zmin" : 13,
+      "len_pml_zmax" : 13,
       "rcoef_pml": 0.0001,
       "npower_pml": 2.0,
       "k_max_pml": 1.0
@@ -52,7 +52,7 @@
   },
   "simul_configs":
   {
-    "n_iter": 20,
+    "n_iter": 1,
     "show_anim": 0,
     "show_xy": 0,
     "show_xz": 1,

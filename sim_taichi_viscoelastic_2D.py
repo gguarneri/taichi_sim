@@ -31,7 +31,7 @@ class SimulatorTaichiViscoelastic(Simulator):
         # --------------------------------------------
         # Inicializacao do framework Taichi
         # --------------------------------------------
-        ti.init(arch=ti.cpu, debug=False, print_ir=False, kernel_profiler=False)
+        ti.init(arch=ti.gpu, debug=False, print_ir=False, kernel_profiler=False)
 
         # --------------------------------------------
         # Parametros gerais da simulacao
