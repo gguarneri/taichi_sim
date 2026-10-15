@@ -1,0 +1,15 @@
+Parametros do ensaio
+--------------------
+
+Simulador: WebGPU-viscoelastic
+Modelo do simulador: split
+Quantidade de iteracoes no tempo: 1000
+Tamanho da ROI: 752x512
+GPU: NVIDIA GeForce RTX 3060 Ti
+Numero de simulacoes: 1
+Energia refletida (sensor): 0.0
+Energia ultimo frame: 1.8e+04
+Tempo execucao: 2.23s
+Tempo total (inclui transferencia de dados): 2.63s
+MSE do campo: 9.906e-05
+MSE medio dos sensores: 4.326e-06

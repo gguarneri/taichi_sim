@@ -59,9 +59,9 @@
     "show_yz": 0,
     "show_debug": 0,
     "show_figs": 0,
-    "plot_results": 0,
+    "plot_results": 1,
     "plot_sensors": 0,
-    "plot_bscan": 0,
+    "plot_bscan": 1,
     "save_results": 1,
     "save_sensors": 0,
     "save_field": 1,
@@ -70,7 +70,7 @@
     "source_env": 1,
     "emission_laws": "./",
     "results_dir": "./pedro/results",
-    "viscoelastic_attn": 0
+    "viscoelastic_attn": 1
   },
   "specimen_params":
   {
